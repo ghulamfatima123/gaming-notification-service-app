@@ -106,3 +106,11 @@ A running record of the prompts and decisions behind this project, written along
 **Environment notes:**
 - Starlette 1.x warns that `httpx` is deprecated for its TestClient. That single warning is filtered in `pyproject.toml` so the dependency range stays wide.
 - A clean virtual environment install (`pip install -e ".[dev]"` → `pytest` → `demo.py`) was verified to mirror what a reviewer does.
+
+## Prompt 8: "You push it and start Phase 6"
+
+**AI contribution:** Pushed Phase 5 and confirmed through the GitHub API that the first CI run passed on **Python 3.10 and 3.13** (install, pytest, demo). This was the first real check of 3.10 compatibility, since only 3.13 was available locally.
+
+**Documentation:**
+- **`AI_WORKFLOW.md`:** tools, the gated workflow, who did what, every prompt in order, where AI review improved the plan, where human oversight changed the outcome (Docker reversal, dead-code removal, the git-identity incident), the AI's self-caught mistakes, the verification approach, and lessons learned. It was built from this log rather than from memory. The AI corrected its own first draft of the prompt table to match the real sequence of prompts.
+- **README, final pass:** a requirements-coverage table (PDF requirement → file), an "Extending the system" table for the interview's what-if questions (new event, new channel, offline inbox, horizontal scaling, reliability, batching), missing authentication added as an explicit tradeoff, and the in-progress roadmap replaced with a "How it was built" summary.

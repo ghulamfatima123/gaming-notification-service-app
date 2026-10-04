@@ -6,7 +6,9 @@ A real-time, event-driven notification system for a multiplayer gaming platform.
 
 Built with **Python 3.10+, FastAPI, and Pydantic v2**. Infrastructure is entirely in memory, so it needs no external services (no Redis, no database).
 
-> **Status:** in progress, built in reviewed phases (see [Roadmap](#roadmap)).
+**Quick start:** `pip install -e ".[dev]"`, then `python demo.py` (headless) or `uvicorn main:app` (live dashboard at http://localhost:8000). Details in [Getting started](#getting-started).
+
+**How AI was used:** see [`AI_WORKFLOW.md`](AI_WORKFLOW.md) and the per-phase log in [`docs/PROMPT_LOG.md`](docs/PROMPT_LOG.md).
 
 ---
 
@@ -30,6 +32,20 @@ Built with **Python 3.10+, FastAPI, and Pydantic v2**. Infrastructure is entirel
 **Player preferences.** Each player can turn **Game** and **Social** notifications on or off independently. Everything is enabled by default (opt-out).
 
 **Real-time delivery.** In-app notifications go over WebSockets. A player can be connected from several tabs at once.
+
+### Requirements coverage
+
+| Challenge requirement | Where it lives |
+|---|---|
+| In-game events (level up, item, challenge, PvP) | `src/domain/events.py`, `src/services/formatters.py` |
+| Social events (friend request, accepted, new follower) | Same, plus `src/producers/social_system.py` |
+| In-app, real-time channel | `src/infrastructure/channels/websocket_channel.py` and the dashboard |
+| Clear notification content | `formatters.py`. The PDF's example messages are asserted word for word in tests. |
+| Per-category user preferences | `src/domain/preferences.py`, `src/infrastructure/memory_prefs_repo.py` |
+| `Notification` class | `src/domain/notification.py`. The brief mentions a provided class, but none was attached, so it is defined here. |
+| Notification handling (interfaces, services) | `src/ports/`, `src/services/router.py` |
+| Event handling: receive, then dispatch | `src/infrastructure/memory_event_bus.py` → `NotificationRouter` |
+| Example usage | `demo.py` (the PDF's triggers) and `static/index.html` |
 
 ---
 
@@ -86,6 +102,20 @@ The design is Hexagonal (Ports & Adapters) with an event-driven pipeline. The co
 | Offline players' notifications are dropped (and logged) | Keeps the channel stateless | A persistent inbox, replayed when the player connects |
 | The dashboard drives producers over the player's own WebSocket | One connection per player; the actor can't be spoofed | Producers live in their own services and publish to a shared broker |
 | In-memory preferences | Satisfies the "simple map" requirement | A database-backed `IPreferenceRepository` |
+| No authentication: the player ID comes from the URL | Out of scope for the exercise; keeps the demo frictionless | Authenticate the WebSocket handshake (e.g. a JWT) and derive the player from the token |
+
+### Extending the system
+
+| Scenario | What changes | What doesn't |
+|---|---|---|
+| **New event type** (e.g. guild invite) | One event class, one formatter, one producer method. Proven by `test_new_event_type_needs_only_a_new_strategy`. | Router, bus, channels |
+| **Push or email channel** | A new `INotificationChannel` adapter. For several at once, a composite channel that fans out to each. | Router, formatters, producers |
+| **Per-channel or per-event preferences** | `NotificationPreferences` keys become (category, channel) or event type | Producers, formatters |
+| **One event notifies many players** (e.g. a guild raid) | A formatter returns a list instead of a single notification; the router loops | Producers, channels |
+| **Offline delivery** | A notification inbox port: persist, then replay to the player on connect and mark as read | Formatters, producers |
+| **Horizontal scaling** | A broker adapter for `IEventBus`. Sockets are per instance, so delivery needs pub/sub routing by player (e.g. Redis). Preferences move to a database with a cache. | Domain, formatters, router logic |
+| **Reliability** | Outbox pattern on the producer side; retries with deduplication by `event_id` / notification `id` | Domain model |
+| **Batching or rate limiting** ("3 players attacked you") | A decorator around the channel that aggregates within a time window | Router, formatters |
 
 ---
 
@@ -105,6 +135,7 @@ The design is Hexagonal (Ports & Adapters) with an event-driven pipeline. The co
 ├── static/index.html         # live two-player dashboard
 ├── tests/                    # pytest suite (57 tests)
 ├── .github/workflows/ci.yml  # pytest + demo on Python 3.10 and 3.13
+├── AI_WORKFLOW.md            # how AI was used, and where human judgment steered
 └── docs/PROMPT_LOG.md        # AI prompts and decisions, phase by phase
 ```
 
@@ -178,15 +209,6 @@ The tests drive the real in-memory adapters, with a `RecordingChannel` test doub
 
 ---
 
-## Roadmap
+## How it was built
 
-- [x] **Phase 1:** domain models and ports
-- [x] **Phase 2:** in-memory adapters (event bus, preference repository, WebSocket channel)
-- [x] **Phase 3:** formatting strategies, `NotificationRouter`, `GameEngine` / `SocialSystem` producers
-- [x] **Phase 4:** FastAPI app, two-player dashboard, headless `demo.py`
-- [x] **Phase 5:** pytest suite and GitHub Actions CI
-- [ ] **Phase 6:** final docs and `AI_WORKFLOW.md`
-
-## AI usage
-
-This project was built with Claude Code as a pair-programmer under a phase-by-phase review workflow. The architecture and constraints were human-defined. Every prompt and decision is logged in [`docs/PROMPT_LOG.md`](docs/PROMPT_LOG.md).
+The project was built in six reviewed phases: domain and ports → in-memory adapters → router and strategies → app and dashboard → tests and CI → docs. There is one commit per phase. Claude Code was used as a pair-programmer. The architecture, constraints and every scope decision were mine, and each phase was reviewed before moving on. The full process is described in [`AI_WORKFLOW.md`](AI_WORKFLOW.md).
