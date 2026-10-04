@@ -54,3 +54,7 @@ A running record of the prompts and decisions behind this project, written along
 - Added `.gitattributes` so line endings stay LF across Windows and Linux (needed for Docker and CI).
 
 **Verification:** an ad-hoc script checked handler isolation, catch-all subscriptions, preference opt-out, delivery to two tabs over a real FastAPI WebSocket (`TestClient`), unregistering on disconnect, and the offline drop path. The dead-socket path (a send that fails) gets a dedicated test in Phase 5.
+
+## Prompt 4: "Add README as well, commit and push"
+
+**AI contribution:** Wrote a README that describes only what exists so far: features, an architecture diagram, layer responsibilities, key decisions, a tradeoffs table, and a roadmap. Unbuilt features are marked as upcoming phases. It will be updated as each phase lands and finalized in Phase 6. `readme` was restored in `pyproject.toml`, and a wheel build confirmed the packaging metadata is valid.
