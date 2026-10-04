@@ -41,3 +41,16 @@ A running record of the prompts and decisions behind this project, written along
 - **CI:** a minimal GitHub Actions workflow that runs pytest.
 - **Offline players:** notifications are dropped and logged. This is a documented tradeoff; a persistent inbox is listed as an extension point.
 - **Git:** one commit per phase. The challenge PDF is kept out of the public repo.
+
+## Prompt 3: "Push Phase 1 and start Phase 2"
+
+**AI contribution:** Initialized git, pushed Phase 1, then implemented the in-memory adapters.
+
+**Design decisions:**
+- **Event bus:** subscriptions match with `isinstance`, so subscribing to `BaseEvent` receives every event. `publish` awaits all handlers concurrently with `asyncio.gather(return_exceptions=True)`, so a failing handler is logged and isolated. Delivery is at-most-once and in-process; a real broker is a drop-in adapter.
+- **Preference repository:** a plain dict of immutable values. No lock is needed on a single event loop. Unknown players get the defaults.
+- **WebSocket channel:** keeps a *set* of sockets per player, so multiple tabs work. The endpoint owns the handshake and the channel only delivers. Dead sockets are removed when a send fails. Offline players' notifications are dropped and logged, as agreed.
+- **Message envelope:** `{"type": "notification", "data": {...}}`, so the dashboard can later receive other message types (acks, errors) on the same socket.
+- Added `.gitattributes` so line endings stay LF across Windows and Linux (needed for Docker and CI).
+
+**Verification:** an ad-hoc script checked handler isolation, catch-all subscriptions, preference opt-out, delivery to two tabs over a real FastAPI WebSocket (`TestClient`), unregistering on disconnect, and the offline drop path. The dead-socket path (a send that fails) gets a dedicated test in Phase 5.
