@@ -71,3 +71,19 @@ A running record of the prompts and decisions behind this project, written along
 - **Kept deliberately simple:** a strategy returns at most one notification, and the router sends to a single channel. Fan-out to several recipients, or a composite channel for push plus in-app, are documented extension points rather than built features.
 
 **Verification:** a scripted run of the four PDF triggers, plus the extra events, the common-item filter and a SOCIAL opt-out, all through the real bus and router with a recording channel. All eight expected notifications were delivered, and the two suppressed cases were dropped.
+
+## Prompt 6: Phase 4, application entrypoint and dashboard
+
+**Human correction mid-phase:** "We said we don't need Docker." The brief only asks for build scripts, so the Dockerfile was **dropped** from scope. This reverses the earlier "small Dockerfile" item; running is `pip install` plus `uvicorn`.
+
+**AI contribution:**
+- **`src/bootstrap.py`:** a composition root, `build_system(channel)`, shared by the server and the demo. The delivery channel is injected.
+- **`main.py`:** `create_app()` factory, so tests get a fresh state per app. Provides `/` (dashboard), `/health` and `/ws/{player_id}`. Actions are dispatched with `match` to the `GameEngine` / `SocialSystem` producers. **The actor always comes from the connection, never from the payload.** Invalid JSON, unknown actions, missing fields and domain validation errors (e.g. attacking yourself, level 0) return `{"type": "error"}` and the socket stays open.
+- **`ConsoleChannel` + `demo.py`:** a headless run of the PDF triggers. It is a second adapter for the same router, a concrete example of the Adapter pattern.
+- **`Notification.actor_id` (optional):** added so the client can act on a notification (the **Accept** button on friend requests needs the sender's ID).
+- **`static/index.html`:** Tailwind and vanilla JavaScript. Two panels built from a `<template>`, preference toggles, game and social actions, a live feed, inline Accept, and a Disconnect button that demonstrates the offline-drop tradeoff. All server text is inserted with `textContent` (no XSS through item names).
+
+**Verification:**
+- `python demo.py` output matched the PDF examples.
+- A `TestClient` script covered the full protocol and 8 malformed-input cases.
+- A manual browser run covered the attack (defender only), friend request → Accept → requester notified, Social off (follow suppressed, attack delivered), Disconnect (controls disabled, status shows drops) and multi-tab fan-out (the logs showed two sockets per player).

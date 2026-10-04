@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -23,6 +24,8 @@ def _utcnow() -> datetime:
 class Notification(BaseModel):
     """An immutable, channel-agnostic notification addressed to one player.
 
+    ``actor_id`` is the other player who caused it, if any (e.g. the friend
+    request sender). Clients use it for follow-up actions such as "Accept".
     Delivery adapters serialise it with ``model_dump(mode="json")``.
     """
 
@@ -34,4 +37,5 @@ class Notification(BaseModel):
     event_type: str
     title: str
     message: str
+    actor_id: Optional[int] = None
     created_at: datetime = Field(default_factory=_utcnow)

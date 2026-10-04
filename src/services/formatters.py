@@ -90,6 +90,7 @@ def format_challenge_completed(event: ChallengeCompletedEvent) -> Notification:
 def format_pvp_attacked(event: PvPAttackedEvent) -> Notification:
     return Notification(
         recipient_id=event.defender_id,
+        actor_id=event.attacker_id,
         category=NotificationCategory.GAME,
         event_type=event.event_type,
         title="You're Under Attack!",
@@ -105,6 +106,7 @@ def format_pvp_attacked(event: PvPAttackedEvent) -> Notification:
 def format_friend_request_sent(event: FriendRequestSentEvent) -> Notification:
     return Notification(
         recipient_id=event.recipient_id,
+        actor_id=event.sender_id,
         category=NotificationCategory.SOCIAL,
         event_type=event.event_type,
         title="New Friend Request",
@@ -115,6 +117,7 @@ def format_friend_request_sent(event: FriendRequestSentEvent) -> Notification:
 def format_friend_request_accepted(event: FriendRequestAcceptedEvent) -> Notification:
     return Notification(
         recipient_id=event.requester_id,
+        actor_id=event.accepter_id,
         category=NotificationCategory.SOCIAL,
         event_type=event.event_type,
         title="Friend Request Accepted",
@@ -125,6 +128,7 @@ def format_friend_request_accepted(event: FriendRequestAcceptedEvent) -> Notific
 def format_new_follower(event: NewFollowerEvent) -> Notification:
     return Notification(
         recipient_id=event.followee_id,
+        actor_id=event.follower_id,
         category=NotificationCategory.SOCIAL,
         event_type=event.event_type,
         title="New Follower",

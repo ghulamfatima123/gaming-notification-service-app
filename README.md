@@ -82,6 +82,7 @@ The design is Hexagonal (Ports & Adapters) with an event-driven pipeline. The co
 | In-process event bus | No infrastructure needed; deterministic tests | Kafka / SNS+SQS / Redis Streams adapter |
 | `publish` awaits handlers | Simple and predictable; failures are isolated per handler | Fire-and-forget with a durable queue and retries |
 | Offline players' notifications are dropped (and logged) | Keeps the channel stateless | A persistent inbox, replayed when the player connects |
+| The dashboard drives producers over the player's own WebSocket | One connection per player; the actor can't be spoofed | Producers live in their own services and publish to a shared broker |
 | In-memory preferences | Satisfies the "simple map" requirement | A database-backed `IPreferenceRepository` |
 
 ---
@@ -89,14 +90,17 @@ The design is Hexagonal (Ports & Adapters) with an event-driven pipeline. The co
 ## Project structure
 
 ```
+├── main.py                   # FastAPI app: WebSocket endpoint + dashboard
+├── demo.py                   # headless walkthrough of the PDF triggers
 ├── pyproject.toml
 ├── src/
+│   ├── bootstrap.py          # composition root (wires adapters to the core)
 │   ├── domain/               # events.py, notification.py, preferences.py
 │   ├── ports/                # event_bus.py, preference_repository.py, notification_channel.py
 │   ├── services/             # router.py, formatters.py (strategies)
-│   ├── infrastructure/       # memory_event_bus.py, memory_prefs_repo.py, channels/
+│   ├── infrastructure/       # memory_event_bus.py, memory_prefs_repo.py, channels/ (websocket, console)
 │   └── producers/            # game_engine.py, social_system.py
-├── static/index.html         # live two-player dashboard              (Phase 4)
+├── static/index.html         # live two-player dashboard
 ├── tests/                    # pytest suite                           (Phase 5)
 └── docs/PROMPT_LOG.md        # AI prompts and decisions, phase by phase
 ```
@@ -111,7 +115,47 @@ source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 ```
 
-Instructions for running the server, the dashboard, the demo, Docker and the tests will be added as those phases land.
+### 1. Headless demo (no browser needed)
+
+```bash
+python demo.py
+```
+
+This runs the challenge's example triggers (`playerLeveledUp(1, 15)`, `itemAcquired(2, "SwordOfAzeroth")`, `friendRequestSent(3, 1)`, `friendRequestAccepted(1, 3)`) and the other events through the real pipeline, then shows the preference opt-out. Each delivered notification is printed by a `ConsoleChannel`, a second delivery adapter that plugs into the same router.
+
+### 2. Live dashboard
+
+```bash
+uvicorn main:app --reload
+```
+
+Open <http://localhost:8000>. Player 1 and Player 2 appear side by side, each with its own WebSocket connection.
+
+| Try this | What you'll see |
+|---|---|
+| **Level up**, **Find an item**, **Complete a challenge** | The notification appears in that player's own feed. Common items produce none. |
+| **Attack Player N** | Only the defender is notified. |
+| **Friend request** → **Accept** in the other feed | The original sender gets "accepted your friend request". |
+| Turn off **Social events**, then have the other player follow you | Nothing arrives. Game events still come through. |
+| **Disconnect** a player, then trigger events at them | The notifications are dropped (see Tradeoffs). |
+| Open the page in a second tab | Both tabs receive the player's notifications. |
+
+The dashboard uses the Tailwind CDN, so it needs an internet connection for styling.
+
+### WebSocket protocol
+
+`ws://localhost:8000/ws/{player_id}`. The acting player is always taken from the connection, never from the payload.
+
+**Client → server**
+```json
+{"action": "level_up", "level": 16}
+{"action": "acquire_item", "item_name": "SwordOfAzeroth", "rarity": "legendary"}
+{"action": "complete_challenge", "challenge_name": "Dragon Slayer"}
+{"action": "attack" | "send_friend_request" | "accept_friend_request" | "follow", "target_id": 2}
+{"action": "set_preference", "category": "game" | "social", "enabled": false}
+```
+
+**Server → client:** `{"type": "notification", "data": {...}}`, `{"type": "preferences", "data": {...}}` (sent on connect and after each change), `{"type": "ack", "action": "..."}` and `{"type": "error", "message": "..."}`. Invalid input returns an error message and the connection stays open.
 
 ---
 
@@ -120,7 +164,7 @@ Instructions for running the server, the dashboard, the demo, Docker and the tes
 - [x] **Phase 1:** domain models and ports
 - [x] **Phase 2:** in-memory adapters (event bus, preference repository, WebSocket channel)
 - [x] **Phase 3:** formatting strategies, `NotificationRouter`, `GameEngine` / `SocialSystem` producers
-- [ ] **Phase 4:** FastAPI app, two-player dashboard, headless `demo.py`, Dockerfile
+- [x] **Phase 4:** FastAPI app, two-player dashboard, headless `demo.py`
 - [ ] **Phase 5:** pytest suite and GitHub Actions CI
 - [ ] **Phase 6:** final docs and `AI_WORKFLOW.md`
 
