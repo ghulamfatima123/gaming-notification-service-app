@@ -10,10 +10,17 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, ClassVar, Literal, Union
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, PositiveInt, TypeAdapter
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PositiveInt,
+    TypeAdapter,
+    model_validator,
+)
 
 
 def _utcnow() -> datetime:
@@ -27,6 +34,22 @@ class BaseEvent(BaseModel):
 
     event_id: UUID = Field(default_factory=uuid4)
     occurred_at: datetime = Field(default_factory=_utcnow)
+
+
+class _TwoPlayerEvent(BaseEvent):
+    """An interaction between two distinct players.
+
+    Subclasses name their (actor, target) fields; a player can't target themselves.
+    """
+
+    player_fields: ClassVar[tuple[str, str]]
+
+    @model_validator(mode="after")
+    def _players_must_differ(self) -> _TwoPlayerEvent:
+        actor, target = self.player_fields
+        if getattr(self, actor) == getattr(self, target):
+            raise ValueError(f"{actor} and {target} must be different players")
+        return self
 
 
 class ItemRarity(str, Enum):
@@ -66,10 +89,11 @@ class ChallengeCompletedEvent(BaseEvent):
     challenge_name: str = Field(min_length=1)
 
 
-class PvPAttackedEvent(BaseEvent):
+class PvPAttackedEvent(_TwoPlayerEvent):
     """``attacker_id`` attacked ``defender_id``."""
 
     event_type: Literal["pvp_attacked"] = "pvp_attacked"
+    player_fields = ("attacker_id", "defender_id")
     attacker_id: int
     defender_id: int
 
@@ -79,29 +103,32 @@ class PvPAttackedEvent(BaseEvent):
 # --------------------------------------------------------------------------- #
 
 
-class FriendRequestSentEvent(BaseEvent):
+class FriendRequestSentEvent(_TwoPlayerEvent):
     """``socialSystem.friendRequestSent(sender_id, recipient_id)``"""
 
     event_type: Literal["friend_request_sent"] = "friend_request_sent"
+    player_fields = ("sender_id", "recipient_id")
     sender_id: int
     recipient_id: int
 
 
-class FriendRequestAcceptedEvent(BaseEvent):
+class FriendRequestAcceptedEvent(_TwoPlayerEvent):
     """``socialSystem.friendRequestAccepted(accepter_id, requester_id)``
 
     ``accepter_id`` accepted the request originally sent by ``requester_id``.
     """
 
     event_type: Literal["friend_request_accepted"] = "friend_request_accepted"
+    player_fields = ("accepter_id", "requester_id")
     accepter_id: int
     requester_id: int
 
 
-class NewFollowerEvent(BaseEvent):
+class NewFollowerEvent(_TwoPlayerEvent):
     """``follower_id`` started following ``followee_id``."""
 
     event_type: Literal["new_follower"] = "new_follower"
+    player_fields = ("follower_id", "followee_id")
     follower_id: int
     followee_id: int
 

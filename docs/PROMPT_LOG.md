@@ -58,3 +58,16 @@ A running record of the prompts and decisions behind this project, written along
 ## Prompt 4: "Add README as well, commit and push"
 
 **AI contribution:** Wrote a README that describes only what exists so far: features, an architecture diagram, layer responsibilities, key decisions, a tradeoffs table, and a roadmap. Unbuilt features are marked as upcoming phases. It will be updated as each phase lands and finalized in Phase 6. `readme` was restored in `pyproject.toml`, and a wheel build confirmed the packaging metadata is valid.
+
+## Prompt 5: Phase 3, router and strategies
+
+**AI contribution:** Implemented the formatting strategies, the `NotificationRouter` and the `GameEngine` / `SocialSystem` producers.
+
+**Design decisions:**
+- **Strategies are plain functions** in a registry (`DEFAULT_FORMATTERS`: event type → function). Each one decides the recipient, the category and the text. Returning `None` means "no notification" (used for COMMON items). Adding an event means one new function and one registry entry.
+- **The router depends only on ports.** `subscribe_to(bus)` registers the router for every type that has a strategy. The pipeline is format → preferences check → send. The formatter registry can be injected (useful for tests and extension).
+- **Producers use the PDF's trigger names, written in Python style** (`player_leveled_up(1, 15)` and so on). They import only the events and `IEventBus`; this was verified by grep.
+- **New domain invariant:** a player can't target themselves in two-player events. The AI's first version used underscore attributes, which Pydantic treats as private instance attributes. It caught this itself and switched to an explicit `ClassVar[tuple[str, str]]` on a shared base class.
+- **Kept deliberately simple:** a strategy returns at most one notification, and the router sends to a single channel. Fan-out to several recipients, or a composite channel for push plus in-app, are documented extension points rather than built features.
+
+**Verification:** a scripted run of the four PDF triggers, plus the extra events, the common-item filter and a SOCIAL opt-out, all through the real bus and router with a recording channel. All eight expected notifications were delivered, and the two suppressed cases were dropped.

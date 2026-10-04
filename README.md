@@ -65,12 +65,15 @@ The design is Hexagonal (Ports & Adapters) with an event-driven pipeline. The co
 | Ports | `src/ports/` | Abstract interfaces: `IEventBus`, `IPreferenceRepository`, `INotificationChannel`. |
 | Services | `src/services/` | `NotificationRouter` and the formatting strategies (the business rules). |
 | Infrastructure | `src/infrastructure/` | In-memory adapters that implement the ports. |
+| Producers | `src/producers/` | `GameEngine` and `SocialSystem`, stand-ins for platform subsystems. They depend only on `IEventBus`. |
 
 ### Key design decisions
 - **Producers are fully decoupled.** Events carry only facts, with no category and no recipient. The formatting strategy for each event decides the category and who gets notified (for example, PvP goes to the defender). Adding a new event type never changes the producers.
 - **Strategy pattern for formatting.** There is one strategy per event type. Adding a new notification means adding one event class and one strategy.
 - **Adapter pattern for delivery.** The router only sees `INotificationChannel`. Push or email would be new adapters, with no changes to the core.
 - **Async ports throughout.** Swapping the in-memory adapters for a database or message broker doesn't change the interfaces.
+- **Domain invariants live in the domain.** A player can't befriend, follow or attack themselves. Two-player events reject this when they are created.
+- **Strategies can decline.** A formatter returning `None` means "don't notify". This is how common items are filtered out (the spec only asks for rare or valuable items).
 - **Typed event parsing.** Each event has a fixed `event_type`, so `parse_event()` validates raw JSON into the correct event class.
 
 ### Tradeoffs (deliberate, for the scope of this exercise)
@@ -90,8 +93,9 @@ The design is Hexagonal (Ports & Adapters) with an event-driven pipeline. The co
 ├── src/
 │   ├── domain/               # events.py, notification.py, preferences.py
 │   ├── ports/                # event_bus.py, preference_repository.py, notification_channel.py
-│   ├── services/             # router + formatting strategies        (Phase 3)
-│   └── infrastructure/       # memory_event_bus.py, memory_prefs_repo.py, channels/
+│   ├── services/             # router.py, formatters.py (strategies)
+│   ├── infrastructure/       # memory_event_bus.py, memory_prefs_repo.py, channels/
+│   └── producers/            # game_engine.py, social_system.py
 ├── static/index.html         # live two-player dashboard              (Phase 4)
 ├── tests/                    # pytest suite                           (Phase 5)
 └── docs/PROMPT_LOG.md        # AI prompts and decisions, phase by phase
@@ -115,7 +119,7 @@ Instructions for running the server, the dashboard, the demo, Docker and the tes
 
 - [x] **Phase 1:** domain models and ports
 - [x] **Phase 2:** in-memory adapters (event bus, preference repository, WebSocket channel)
-- [ ] **Phase 3:** formatting strategies, `NotificationRouter`, `GameEngine` / `SocialSystem` producers
+- [x] **Phase 3:** formatting strategies, `NotificationRouter`, `GameEngine` / `SocialSystem` producers
 - [ ] **Phase 4:** FastAPI app, two-player dashboard, headless `demo.py`, Dockerfile
 - [ ] **Phase 5:** pytest suite and GitHub Actions CI
 - [ ] **Phase 6:** final docs and `AI_WORKFLOW.md`
