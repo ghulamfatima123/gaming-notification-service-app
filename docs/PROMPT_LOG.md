@@ -87,3 +87,22 @@ A running record of the prompts and decisions behind this project, written along
 - `python demo.py` output matched the PDF examples.
 - A `TestClient` script covered the full protocol and 8 malformed-input cases.
 - A manual browser run covered the attack (defender only), friend request → Accept → requester notified, Social off (follow suppressed, attack delivered), Disconnect (controls disabled, status shows drops) and multi-tab fan-out (the logs showed two sockets per player).
+
+## Prompt 7: "Remove parse_event and start Phase 5"
+
+**Human decision:** remove `parse_event()`. After Phase 4, the endpoint calls the producers directly, so the discriminated-union parser had become dead code.
+
+**AI contribution: test suite (57 tests) and CI**
+- **`conftest.py`:** real in-memory bus and repository, a `RecordingChannel` test double, producer fixtures, and an `opt_out` helper.
+- **`test_router.py` (the brief's three required tests, plus more):** PDF triggers formatted and delivered; SOCIAL opt-out drops friend requests but allows level-ups; PvP goes strictly to the defender. Also covered: the GAME opt-out, opt-out being per player, preferences checked for the *recipient* (not the actor), re-enabling a category, and an **extensibility test**, where a brand-new `GuildInviteEvent` is delivered by adding only a strategy.
+- `test_formatters.py`, `test_domain.py`, `test_infrastructure.py` (including the dead-socket test promised in Phase 2) and `test_app.py` (real WebSocket sessions through `create_app()`).
+- **Mutation check:** five realistic bugs were planted one at a time (PvP to the attacker, preferences ignored, preferences checked for the wrong player, bus failures not isolated, actor read from the payload). Each was caught by a failing test, then reverted.
+- **CI:** GitHub Actions runs `pytest` and `python demo.py` on Python 3.10 (the minimum supported) and 3.13.
+
+**Issues the AI caught in its own work:**
+- The first `test_app.py` helper entered the WebSocket context manager twice. It was replaced with a `@contextmanager`.
+- A test that inspected the bus's private `_handlers` was dropped, because it tested implementation details instead of behaviour.
+
+**Environment notes:**
+- Starlette 1.x warns that `httpx` is deprecated for its TestClient. That single warning is filtered in `pyproject.toml` so the dependency range stays wide.
+- A clean virtual environment install (`pip install -e ".[dev]"` → `pytest` → `demo.py`) was verified to mirror what a reviewer does.

@@ -1,5 +1,7 @@
 # Gaming Notification Service
 
+[![CI](https://github.com/ghulamfatima123/gaming-notification-service-app/actions/workflows/ci.yml/badge.svg)](https://github.com/ghulamfatima123/gaming-notification-service-app/actions/workflows/ci.yml)
+
 A real-time, event-driven notification system for a multiplayer gaming platform. Game and social subsystems emit domain events. A notification pipeline turns them into player-facing notifications, checks each player's preferences, and pushes them live over WebSockets.
 
 Built with **Python 3.10+, FastAPI, and Pydantic v2**. Infrastructure is entirely in memory, so it needs no external services (no Redis, no database).
@@ -74,7 +76,7 @@ The design is Hexagonal (Ports & Adapters) with an event-driven pipeline. The co
 - **Async ports throughout.** Swapping the in-memory adapters for a database or message broker doesn't change the interfaces.
 - **Domain invariants live in the domain.** A player can't befriend, follow or attack themselves. Two-player events reject this when they are created.
 - **Strategies can decline.** A formatter returning `None` means "don't notify". This is how common items are filtered out (the spec only asks for rare or valuable items).
-- **Typed event parsing.** Each event has a fixed `event_type`, so `parse_event()` validates raw JSON into the correct event class.
+- **Stable event names.** Each event has a fixed `event_type` (e.g. `"level_up"`), which every notification carries so clients can tell them apart.
 
 ### Tradeoffs (deliberate, for the scope of this exercise)
 | Choice | Why | Production path |
@@ -101,7 +103,8 @@ The design is Hexagonal (Ports & Adapters) with an event-driven pipeline. The co
 │   ├── infrastructure/       # memory_event_bus.py, memory_prefs_repo.py, channels/ (websocket, console)
 │   └── producers/            # game_engine.py, social_system.py
 ├── static/index.html         # live two-player dashboard
-├── tests/                    # pytest suite                           (Phase 5)
+├── tests/                    # pytest suite (57 tests)
+├── .github/workflows/ci.yml  # pytest + demo on Python 3.10 and 3.13
 └── docs/PROMPT_LOG.md        # AI prompts and decisions, phase by phase
 ```
 
@@ -142,6 +145,22 @@ Open <http://localhost:8000>. Player 1 and Player 2 appear side by side, each wi
 
 The dashboard uses the Tailwind CDN, so it needs an internet connection for styling.
 
+### 3. Tests
+
+```bash
+pytest
+```
+
+| File | Covers |
+|---|---|
+| `test_router.py` | The PDF triggers end to end; PvP goes only to the defender; SOCIAL opt-out drops friend requests but keeps level-ups (and the reverse); opt-out is per player and checked against the recipient; a new event type needs only a new strategy |
+| `test_formatters.py` | Every domain event has a strategy; message text; rarity filtering; item-name formatting |
+| `test_domain.py` | Self-targeting rejected; positive levels; immutability; preference defaults |
+| `test_infrastructure.py` | Bus fan-out, catch-all subscriptions, failure isolation; repository defaults; WebSocket multi-tab delivery, offline drop, dead-socket cleanup |
+| `test_app.py` | Real WebSocket sessions: attack, friend request → accept, preference toggle, 8 malformed inputs, the actor can't be spoofed |
+
+The tests drive the real in-memory adapters, with a `RecordingChannel` test double in place of WebSockets. To check that the suite catches real defects, deliberately planted bugs were each confirmed to fail it: PvP sent to the attacker, preferences ignored, preferences checked for the wrong player, bus failures not isolated, and the actor read from the payload. CI runs the suite and the demo on Python 3.10 and 3.13.
+
 ### WebSocket protocol
 
 `ws://localhost:8000/ws/{player_id}`. The acting player is always taken from the connection, never from the payload.
@@ -165,7 +184,7 @@ The dashboard uses the Tailwind CDN, so it needs an internet connection for styl
 - [x] **Phase 2:** in-memory adapters (event bus, preference repository, WebSocket channel)
 - [x] **Phase 3:** formatting strategies, `NotificationRouter`, `GameEngine` / `SocialSystem` producers
 - [x] **Phase 4:** FastAPI app, two-player dashboard, headless `demo.py`
-- [ ] **Phase 5:** pytest suite and GitHub Actions CI
+- [x] **Phase 5:** pytest suite and GitHub Actions CI
 - [ ] **Phase 6:** final docs and `AI_WORKFLOW.md`
 
 ## AI usage

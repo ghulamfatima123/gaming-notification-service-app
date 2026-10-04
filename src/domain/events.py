@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Annotated, Any, ClassVar, Literal, Union
+from typing import ClassVar, Literal
 from uuid import UUID, uuid4
 
 from pydantic import (
@@ -18,7 +18,6 @@ from pydantic import (
     ConfigDict,
     Field,
     PositiveInt,
-    TypeAdapter,
     model_validator,
 )
 
@@ -132,30 +131,3 @@ class NewFollowerEvent(_TwoPlayerEvent):
     follower_id: int
     followee_id: int
 
-
-# --------------------------------------------------------------------------- #
-# Parsing raw payloads (e.g. JSON from a WebSocket) into typed events
-# --------------------------------------------------------------------------- #
-
-DomainEvent = Annotated[
-    Union[
-        LevelUpEvent,
-        ItemAcquiredEvent,
-        ChallengeCompletedEvent,
-        PvPAttackedEvent,
-        FriendRequestSentEvent,
-        FriendRequestAcceptedEvent,
-        NewFollowerEvent,
-    ],
-    Field(discriminator="event_type"),
-]
-
-_event_adapter: TypeAdapter[DomainEvent] = TypeAdapter(DomainEvent)
-
-
-def parse_event(data: dict[str, Any]) -> BaseEvent:
-    """Validate a raw dict into the concrete event selected by ``event_type``.
-
-    Raises ``pydantic.ValidationError`` on unknown types or bad fields.
-    """
-    return _event_adapter.validate_python(data)

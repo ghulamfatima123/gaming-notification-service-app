@@ -3,7 +3,6 @@
 from src.domain.events import (
     BaseEvent,
     ChallengeCompletedEvent,
-    DomainEvent,
     FriendRequestAcceptedEvent,
     FriendRequestSentEvent,
     ItemAcquiredEvent,
@@ -11,7 +10,6 @@ from src.domain.events import (
     LevelUpEvent,
     NewFollowerEvent,
     PvPAttackedEvent,
-    parse_event,
 )
 from src.domain.notification import Notification, NotificationCategory
 from src.domain.preferences import NotificationPreferences
@@ -19,7 +17,6 @@ from src.domain.preferences import NotificationPreferences
 __all__ = [
     "BaseEvent",
     "ChallengeCompletedEvent",
-    "DomainEvent",
     "FriendRequestAcceptedEvent",
     "FriendRequestSentEvent",
     "ItemAcquiredEvent",
@@ -30,5 +27,4 @@ __all__ = [
     "NotificationCategory",
     "NotificationPreferences",
     "PvPAttackedEvent",
-    "parse_event",
 ]
