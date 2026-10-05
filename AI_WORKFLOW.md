@@ -74,6 +74,8 @@ The full opening prompt is in the [Appendix](#appendix-the-opening-prompt). Afte
 | 9 | *"pushed, remove parse_event and start phase 5"* | Unused code removed; 57 tests and CI added |
 | 10 | *"you push it and start phase 6"* | Phase 5 pushed; this documentation |
 | 11 | *"have we done that?"* (quoting the PDF's example triggers) | Both the tests and the demo passed an explicit rarity to `item_acquired`. The AI added a test that runs the four PDF calls **exactly as written**, closing that gap |
+| 12 | *"is these important?"* (three optional extras) | The AI recommended skipping deduplication (duplicates can't occur in this design), building a **simpler** PvP defeat (notify the loser only, no router change), and building the inbox only if time allowed |
+| 13 | *"yes do #3 PvPDefeatedEvent and i think 2 is also important if we can do after coming online social events should be visible"* | Both built. The AI widened "social events" to **every** missed notification the player hasn't opted out of, since a missed attack matters too |
 
 ## 5. Where AI review improved my plan
 
@@ -90,6 +92,7 @@ Before writing code, I asked the AI to check my brief against the PDF. It found 
 - **Docker: approved, then reversed.** The AI suggested a small optional Dockerfile and I first agreed. Mid-Phase 4, I pushed back ("we said we don't need docker"). The brief only asks for build scripts, so it was dropped. That's one less thing to maintain and defend.
 - **Removing dead code.** After Phase 4, the WebSocket endpoint called the producers directly, which left a typed-JSON parser (`parse_event`) from Phase 1 unused. The AI asked whether to keep it with tests or remove it. I chose to remove it rather than defend unused code.
 - **Git identity.** The AI committed using the machine's global git identity, which was my work email, and pushed it to my public repo. I caught it. The fix was a repo-local `user.email`, a history rewrite that kept the original dates, and a force-push. The AI's safety guard **blocked it from force-pushing on its own**, so I ran the push myself. Lesson: check the commit identity before the first commit in any repo; the AI now does this by default.
+- **The offline inbox was my call.** The design originally dropped notifications for offline players, as a documented tradeoff. After the core was done, I decided players should see what they missed. The AI built it behind a new port (`INotificationInbox`), so the router change is three lines: "if the channel couldn't deliver it, keep it". It also planted bugs to prove the new tests guard it.
 - **Pushing was gated.** Phases were committed locally and pushed only after I said so.
 
 ## 7. Where the AI caught its own mistakes
@@ -102,6 +105,7 @@ I asked the AI to verify everything it wrote, and the verification found real bu
 | The WebSocket test helper entered the connection's context manager **twice** | Reviewing its own test code | Rewritten as a `@contextmanager` |
 | A test inspected the bus's private `_handlers` | Self-review: it tested implementation, not behaviour | Removed; the behaviour is covered end to end |
 | The prompt log claimed "dead-socket cleanup" was verified when that path hadn't actually been exercised | Re-reading its own claim against what it had run | The log was corrected and a dedicated test was added in Phase 5 |
+| The first version of the inbox's WebSocket test **hung** (instead of failing) when a planted bug stopped the replay, because it waited for a message that never came | The planted-bug check timed out | The test now triggers a reply first, so a missing replay fails fast; the check runs with a timeout |
 | Dashboard clicks landed on the wrong buttons in a tiny browser pane | Inspecting the DOM state after clicking | Switched to element references; the feature itself was fine |
 
 ## 8. How AI output was verified

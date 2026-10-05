@@ -109,6 +109,11 @@ def create_app() -> FastAPI:
         channel.register(player_id, websocket)
         try:
             await websocket.send_json(await preferences_message(system, player_id))
+            missed = await system.inbox.drain(player_id)
+            if missed:
+                await websocket.send_json(
+                    {"type": "missed", "data": [n.model_dump(mode="json") for n in missed]}
+                )
             while True:
                 raw = await websocket.receive_text()
                 reply: Optional[dict[str, Any]]

@@ -55,6 +55,28 @@ def test_defeat_reaches_only_the_loser(client):
         assert p2.receive_json()["data"]["message"] == "Player '1' has defeated you!"
 
 
+def test_missed_notifications_arrive_when_the_player_connects(client):
+    with player(client, 1) as p1:
+        p1.send_json({"action": "send_friend_request", "target_id": 2})
+        p1.receive_json()  # ack
+        p1.send_json({"action": "attack", "target_id": 2})
+        p1.receive_json()  # ack
+
+    with player(client, 2) as p2:  # player 2 was offline until now
+        # Trigger a reply too, so a missing replay fails the test instead of hanging it.
+        p2.send_json({"action": "level_up", "level": 2})
+        missed = p2.receive_json()
+        assert missed["type"] == "missed"
+        assert [n["event_type"] for n in missed["data"]] == [
+            "friend_request_sent",
+            "pvp_attacked",
+        ]
+
+    with player(client, 2) as p2:  # already delivered, so nothing is replayed
+        p2.send_json({"action": "level_up", "level": 2})
+        assert p2.receive_json()["data"]["event_type"] == "level_up"
+
+
 def test_friend_request_accept_round_trip(client):
     with player(client, 1) as p1, player(client, 2) as p2:
         p1.send_json({"action": "send_friend_request", "target_id": 2})

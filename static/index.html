@@ -114,7 +114,10 @@
         <span data-ref="badge" class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"></span>
       </div>
       <div class="mt-2 flex items-center justify-between">
-        <time data-ref="time" class="text-[11px] text-slate-500"></time>
+        <p class="flex items-center gap-2">
+          <time data-ref="time" class="text-[11px] text-slate-500"></time>
+          <span data-ref="missed" class="hidden rounded bg-fuchsia-500/15 px-1.5 py-0.5 text-[10px] font-medium text-fuchsia-300">Missed while offline</span>
+        </p>
         <button data-ref="accept" class="hidden rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium hover:bg-emerald-500 disabled:cursor-default disabled:bg-slate-700">Accept</button>
       </div>
     </li>
@@ -193,7 +196,7 @@
 
       setConnected(online) {
         this.ref.dot.className = `h-2 w-2 rounded-full ${online ? "bg-emerald-400" : "bg-slate-500"}`;
-        this.ref.status.textContent = online ? "Online" : "Offline (notifications are dropped)";
+        this.ref.status.textContent = online ? "Online" : "Offline (notifications are saved for later)";
         this.ref.connect.textContent = online ? "Disconnect" : "Connect";
         this.root.querySelectorAll("[data-action], [data-pref], [data-ref=accept]").forEach((el) => {
           if (!el.dataset.done) el.disabled = !online;
@@ -237,6 +240,9 @@
         switch (msg.type) {
           case "notification":
             return this.addNotification(msg.data);
+          case "missed":
+            msg.data.forEach((n) => this.addNotification(n, true));
+            return this.setLast(`${msg.data.length} notification(s) arrived while you were offline`);
           case "preferences":
             for (const [category, enabled] of Object.entries(msg.data.enabled)) {
               const input = this.root.querySelector(`[data-pref="${category}"]`);
@@ -261,7 +267,7 @@
         this.root.querySelector('[data-action="level_up"]').textContent = `Level up (→ ${this.level + 1})`;
       }
 
-      addNotification(n) {
+      addNotification(n, missed = false) {
         const item = document.getElementById("notification-template").content.firstElementChild.cloneNode(true);
         const r = refs(item);
         r.title.textContent = n.title;
@@ -269,6 +275,7 @@
         r.badge.textContent = n.category;
         r.badge.className += ` ${BADGE[n.category] ?? ""}`;
         r.time.textContent = new Date(n.created_at).toLocaleTimeString();
+        r.missed.classList.toggle("hidden", !missed);
 
         if (n.event_type === "friend_request_sent" && n.actor_id != null) {
           r.accept.classList.remove("hidden");

@@ -8,6 +8,7 @@ from typing import Mapping, Optional
 from src.domain.events import BaseEvent
 from src.ports.event_bus import IEventBus
 from src.ports.notification_channel import INotificationChannel
+from src.ports.notification_inbox import INotificationInbox
 from src.ports.preference_repository import IPreferenceRepository
 from src.services.formatters import DEFAULT_FORMATTERS, Formatter
 
@@ -15,21 +16,24 @@ logger = logging.getLogger(__name__)
 
 
 class NotificationRouter:
-    """Event -> format (Strategy) -> check preferences -> send (Adapter).
+    """Event -> format (Strategy) -> check preferences -> send (Adapter),
+    keeping anything the channel couldn't deliver in the player's inbox.
 
     The router depends only on ports, so every collaborator can be swapped
-    (a broker for the bus, a database for preferences, push or email for the
-    channel) without changing this class.
+    (a broker for the bus, a database for preferences or the inbox, push or
+    email for the channel) without changing this class.
     """
 
     def __init__(
         self,
         preferences: IPreferenceRepository,
         channel: INotificationChannel,
+        inbox: INotificationInbox,
         formatters: Optional[Mapping[type[BaseEvent], Formatter]] = None,
     ) -> None:
         self._preferences = preferences
         self._channel = channel
+        self._inbox = inbox
         self._formatters = dict(DEFAULT_FORMATTERS if formatters is None else formatters)
 
     def subscribe_to(self, bus: IEventBus) -> None:
@@ -58,4 +62,10 @@ class NotificationRouter:
             )
             return
 
-        await self._channel.send(notification)
+        if not await self._channel.send(notification):
+            await self._inbox.add(notification)
+            logger.info(
+                "Player %s offline; kept %s notification for later",
+                notification.recipient_id,
+                notification.event_type,
+            )

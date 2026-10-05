@@ -142,6 +142,41 @@ async def test_re_enabling_a_category_resumes_delivery(social, channel, prefs, o
 
 
 # --------------------------------------------------------------------------- #
+# Offline players (inbox)
+# --------------------------------------------------------------------------- #
+
+
+async def test_undelivered_notifications_are_kept_for_offline_players(
+    game, social, channel, inbox
+):
+    channel.offline.add(1)
+
+    await social.friend_request_sent(3, 1)
+    await game.player_attacked(attacker_id=2, defender_id=1)
+
+    assert channel.sent == []
+    missed = await inbox.drain(1)
+    assert [n.event_type for n in missed] == ["friend_request_sent", "pvp_attacked"]
+    assert await inbox.drain(1) == []  # draining clears the inbox
+
+
+async def test_delivered_notifications_are_not_kept(game, channel, inbox):
+    await game.player_leveled_up(1, 2)
+
+    assert len(channel.sent) == 1
+    assert await inbox.drain(1) == []
+
+
+async def test_opted_out_notifications_are_not_kept_either(social, channel, inbox, opt_out):
+    channel.offline.add(1)
+    await opt_out(1, SOCIAL)
+
+    await social.friend_request_sent(3, 1)
+
+    assert await inbox.drain(1) == []
+
+
+# --------------------------------------------------------------------------- #
 # Extensibility
 # --------------------------------------------------------------------------- #
 
@@ -165,9 +200,9 @@ def format_guild_invite(event: GuildInviteEvent) -> Notification:
     )
 
 
-async def test_new_event_type_needs_only_a_new_strategy(bus, prefs, channel):
+async def test_new_event_type_needs_only_a_new_strategy(bus, prefs, channel, inbox):
     router = NotificationRouter(
-        prefs, channel, {**DEFAULT_FORMATTERS, GuildInviteEvent: format_guild_invite}
+        prefs, channel, inbox, {**DEFAULT_FORMATTERS, GuildInviteEvent: format_guild_invite}
     )
     router.subscribe_to(bus)
 
@@ -178,8 +213,8 @@ async def test_new_event_type_needs_only_a_new_strategy(bus, prefs, channel):
     ]
 
 
-async def test_event_without_a_strategy_is_ignored(prefs, channel):
-    router = NotificationRouter(prefs, channel)
+async def test_event_without_a_strategy_is_ignored(prefs, channel, inbox):
+    router = NotificationRouter(prefs, channel, inbox)
 
     await router.handle(GuildInviteEvent(inviter_id=1, invitee_id=2))
 

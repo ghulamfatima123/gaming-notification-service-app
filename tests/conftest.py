@@ -6,6 +6,7 @@ import pytest
 
 from src.domain.notification import Notification, NotificationCategory
 from src.infrastructure.memory_event_bus import InMemoryEventBus
+from src.infrastructure.memory_inbox import InMemoryNotificationInbox
 from src.infrastructure.memory_prefs_repo import InMemoryPreferenceRepository
 from src.ports.notification_channel import INotificationChannel
 from src.producers.game_engine import GameEngine
@@ -14,13 +15,17 @@ from src.services.router import NotificationRouter
 
 
 class RecordingChannel(INotificationChannel):
-    """Test double: stores every notification instead of delivering it."""
+    """Test double: records deliveries. Players in ``offline`` can't be reached."""
 
     def __init__(self) -> None:
         self.sent: list[Notification] = []
+        self.offline: set[int] = set()
 
-    async def send(self, notification: Notification) -> None:
+    async def send(self, notification: Notification) -> bool:
+        if notification.recipient_id in self.offline:
+            return False
         self.sent.append(notification)
+        return True
 
     def for_player(self, player_id: int) -> list[Notification]:
         return [n for n in self.sent if n.recipient_id == player_id]
@@ -42,10 +47,18 @@ def channel() -> RecordingChannel:
 
 
 @pytest.fixture
+def inbox() -> InMemoryNotificationInbox:
+    return InMemoryNotificationInbox()
+
+
+@pytest.fixture
 def router(
-    bus: InMemoryEventBus, prefs: InMemoryPreferenceRepository, channel: RecordingChannel
+    bus: InMemoryEventBus,
+    prefs: InMemoryPreferenceRepository,
+    channel: RecordingChannel,
+    inbox: InMemoryNotificationInbox,
 ) -> NotificationRouter:
-    router = NotificationRouter(prefs, channel)
+    router = NotificationRouter(prefs, channel, inbox)
     router.subscribe_to(bus)
     return router
 

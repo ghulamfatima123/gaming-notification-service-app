@@ -20,9 +20,9 @@ class WebSocketChannel(INotificationChannel):
       one of them receives the notification.
     - The HTTP endpoint owns the handshake (``accept``) and the receive loop.
       This class only tracks connections and delivers to them.
-    - Offline players: the notification is dropped and logged. This is a
-      deliberate tradeoff for the exercise. A persistent inbox that is replayed
-      on connect is the natural extension point.
+    - ``send`` returns ``False`` when no live connection received the
+      notification (offline, or every socket was dead). The router then keeps
+      it in the player's inbox.
     """
 
     def __init__(self) -> None:
@@ -48,23 +48,20 @@ class WebSocketChannel(INotificationChannel):
     def is_online(self, player_id: int) -> bool:
         return bool(self._connections.get(player_id))
 
-    async def send(self, notification: Notification) -> None:
+    async def send(self, notification: Notification) -> bool:
         player_id = notification.recipient_id
         sockets = self._connections.get(player_id)
         if not sockets:
-            logger.info(
-                "Player %s offline; dropping %s notification %s",
-                player_id,
-                notification.event_type,
-                notification.id,
-            )
-            return
+            return False
 
         payload = {"type": "notification", "data": notification.model_dump(mode="json")}
+        delivered = False
         # Iterate over a snapshot: dead sockets are removed during the loop.
         for websocket in list(sockets):
             try:
                 await websocket.send_json(payload)
+                delivered = True
             except Exception:  # connection closed or broken mid-send
                 logger.warning("Dropping dead socket for player %s", player_id, exc_info=True)
                 self.unregister(player_id, websocket)
+        return delivered

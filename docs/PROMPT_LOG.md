@@ -133,3 +133,12 @@ A running record of the prompts and decisions behind this project, written along
 **Human decision:** build #3 as suggested and #2 as well ("after coming online, social events should be visible").
 
 **#3 delivered:** `PvPDefeatedEvent(winner_id, loser_id)`, one formatter, a `GameEngine.player_defeated` method, a `"defeat"` action, a dashboard button, and the demo line. No router change was needed. The existing `test_every_domain_event_has_a_strategy` immediately required the new formatter, and new tests cover routing to the loser only, self-targeting rejected and the WebSocket round trip (61 tests).
+
+**#2 delivered: offline inbox.**
+- **Port:** `INotificationInbox` (`add` / `drain`). **Adapter:** `InMemoryNotificationInbox`, which keeps the latest 50 per player.
+- `INotificationChannel.send()` now returns whether delivery succeeded. The WebSocket channel returns `False` when the player has no live socket, or when every socket was dead.
+- **Router:** `if not await channel.send(n): await inbox.add(n)`. The flow stays readable in one place; opted-out notifications are never stored.
+- **Endpoint:** on connect, drains the inbox and sends `{"type": "missed", "data": [...]}`. The dashboard tags these "Missed while offline", and Accept still works on a missed friend request.
+- **Scope widened by the AI:** you asked for social events after reconnecting. The inbox keeps every missed notification the player hasn't opted out of, because a missed attack matters too.
+- **Tests:** 68 in total. Planted bugs (undelivered not kept, never replayed, offline reported as delivered) were all caught. The first planted-bug run **hung**: the WebSocket test waited forever for a "missed" message that never came. The run was stopped, the mutated router was restored by hand, and the test was changed to trigger a reply first, so a missing replay fails fast. The check now runs with a timeout.
+- **Browser check:** Player 2 disconnects; Player 1 sends a friend request, a defeat and a follow; Player 2 reconnects and sees all three tagged as missed; Accept on the missed request notifies Player 1.

@@ -34,6 +34,8 @@ Built with **Python 3.10+, FastAPI, and Pydantic v2**. Infrastructure is entirel
 
 **Real-time delivery.** In-app notifications go over WebSockets. A player can be connected from several tabs at once.
 
+**Offline catch-up.** Notifications for players who aren't connected are kept in an inbox. When the player connects, they arrive with a "Missed while offline" label.
+
 ### Requirements coverage
 
 | Challenge requirement | Where it lives |
@@ -71,17 +73,18 @@ The design is Hexagonal (Ports & Adapters) with an event-driven pipeline. The co
          │  ┌───────────────────────┐
          │  │ IPreferenceRepository │◄── InMemoryPreferenceRepository
          │  └───────────────────────┘
-         │ send(notification)
+         │ send(notification) → delivered?
          ▼
-  ┌──────────────────────┐
-  │ INotificationChannel │◄──── WebSocketChannel (Adapter)
-  └──────────────────────┘
+  ┌──────────────────────┐   not delivered    ┌────────────────────┐
+  │ INotificationChannel │───────────────────►│ INotificationInbox │◄── InMemoryNotificationInbox
+  └──────────────────────┘   (player offline) └────────────────────┘
+     ▲ WebSocketChannel (Adapter)                drained when the player connects
 ```
 
 | Layer | Path | Responsibility |
 |---|---|---|
 | Domain | `src/domain/` | Pure Pydantic models: events, `Notification`, preferences. No I/O. |
-| Ports | `src/ports/` | Abstract interfaces: `IEventBus`, `IPreferenceRepository`, `INotificationChannel`. |
+| Ports | `src/ports/` | Abstract interfaces: `IEventBus`, `IPreferenceRepository`, `INotificationChannel`, `INotificationInbox`. |
 | Services | `src/services/` | `NotificationRouter` and the formatting strategies (the business rules). |
 | Infrastructure | `src/infrastructure/` | In-memory adapters that implement the ports. |
 | Producers | `src/producers/` | `GameEngine` and `SocialSystem`, stand-ins for platform subsystems. They depend only on `IEventBus`. |
@@ -100,7 +103,7 @@ The design is Hexagonal (Ports & Adapters) with an event-driven pipeline. The co
 |---|---|---|
 | In-process event bus | No infrastructure needed; deterministic tests | Kafka / SNS+SQS / Redis Streams adapter |
 | `publish` awaits handlers | Simple and predictable; failures are isolated per handler | Fire-and-forget with a durable queue and retries |
-| Offline players' notifications are dropped (and logged) | Keeps the channel stateless | A persistent inbox, replayed when the player connects |
+| Offline inbox is in memory, capped at 50 per player, and replayed once (at most once) | Covers the offline case without infrastructure; the cap bounds memory | A durable inbox (database or Redis) with read receipts, so notifications survive restarts and are re-sent until acknowledged |
 | The dashboard drives producers over the player's own WebSocket | One connection per player; the actor can't be spoofed | Producers live in their own services and publish to a shared broker |
 | In-memory preferences | Satisfies the "simple map" requirement | A database-backed `IPreferenceRepository` |
 | No authentication: the player ID comes from the URL | Out of scope for the exercise; keeps the demo frictionless | Authenticate the WebSocket handshake (e.g. a JWT) and derive the player from the token |
@@ -113,7 +116,7 @@ The design is Hexagonal (Ports & Adapters) with an event-driven pipeline. The co
 | **Push or email channel** | A new `INotificationChannel` adapter. For several at once, a composite channel that fans out to each. | Router, formatters, producers |
 | **Per-channel or per-event preferences** | `NotificationPreferences` keys become (category, channel) or event type | Producers, formatters |
 | **One event notifies many players** (e.g. a guild raid) | A formatter returns a list instead of a single notification; the router loops | Producers, channels |
-| **Offline delivery** | A notification inbox port: persist, then replay to the player on connect and mark as read | Formatters, producers |
+| **Durable offline delivery** | Swap `InMemoryNotificationInbox` for a database-backed adapter; add read receipts | Router, formatters, producers |
 | **Horizontal scaling** | A broker adapter for `IEventBus`. Sockets are per instance, so delivery needs pub/sub routing by player (e.g. Redis). Preferences move to a database with a cache. | Domain, formatters, router logic |
 | **Reliability** | Outbox pattern on the producer side; retries with deduplication by `event_id` / notification `id` | Domain model |
 | **Batching or rate limiting** ("3 players attacked you") | A decorator around the channel that aggregates within a time window | Router, formatters |
@@ -131,10 +134,10 @@ The design is Hexagonal (Ports & Adapters) with an event-driven pipeline. The co
 │   ├── domain/               # events.py, notification.py, preferences.py
 │   ├── ports/                # event_bus.py, preference_repository.py, notification_channel.py
 │   ├── services/             # router.py, formatters.py (strategies)
-│   ├── infrastructure/       # memory_event_bus.py, memory_prefs_repo.py, channels/ (websocket, console)
+│   ├── infrastructure/       # memory_event_bus.py, memory_prefs_repo.py, memory_inbox.py, channels/
 │   └── producers/            # game_engine.py, social_system.py
 ├── static/index.html         # live two-player dashboard
-├── tests/                    # pytest suite (58 tests)
+├── tests/                    # pytest suite (68 tests)
 ├── .github/workflows/ci.yml  # pytest + demo on Python 3.10 and 3.13
 ├── AI_WORKFLOW.md            # how AI was used, and where human judgment steered
 └── docs/PROMPT_LOG.md        # AI prompts and decisions, phase by phase
@@ -172,7 +175,7 @@ Open <http://localhost:8000>. Player 1 and Player 2 appear side by side, each wi
 | **Attack** / **Defeat Player N** | Only the defender (or loser) is notified. |
 | **Friend request** → **Accept** in the other feed | The original sender gets "accepted your friend request". |
 | Turn off **Social events**, then have the other player follow you | Nothing arrives. Game events still come through. |
-| **Disconnect** a player, then trigger events at them | The notifications are dropped (see Tradeoffs). |
+| **Disconnect** a player, trigger events at them, then **Connect** | The missed notifications appear with a "Missed while offline" label (Accept still works). |
 | Open the page in a second tab | Both tabs receive the player's notifications. |
 
 The dashboard uses the Tailwind CDN, so it needs an internet connection for styling.
@@ -185,13 +188,13 @@ pytest
 
 | File | Covers |
 |---|---|
-| `test_router.py` | The PDF triggers end to end; PvP goes only to the defender; SOCIAL opt-out drops friend requests but keeps level-ups (and the reverse); opt-out is per player and checked against the recipient; a new event type needs only a new strategy |
+| `test_router.py` | The PDF triggers end to end; PvP goes only to the defender; SOCIAL opt-out drops friend requests but keeps level-ups (and the reverse); opt-out is per player and checked against the recipient; a new event type needs only a new strategy; undelivered notifications are kept for offline players, but opted-out ones aren't |
 | `test_formatters.py` | Every domain event has a strategy; message text; rarity filtering; item-name formatting |
 | `test_domain.py` | Self-targeting rejected; positive levels; immutability; preference defaults |
-| `test_infrastructure.py` | Bus fan-out, catch-all subscriptions, failure isolation; repository defaults; WebSocket multi-tab delivery, offline drop, dead-socket cleanup |
-| `test_app.py` | Real WebSocket sessions: attack, friend request → accept, preference toggle, 8 malformed inputs, the actor can't be spoofed |
+| `test_infrastructure.py` | Bus fan-out, catch-all subscriptions, failure isolation; repository defaults; inbox ordering, clearing and cap; WebSocket multi-tab delivery, delivery reporting, dead-socket cleanup |
+| `test_app.py` | Real WebSocket sessions: attack, defeat, missed notifications on reconnect, friend request → accept, preference toggle, 8 malformed inputs, the actor can't be spoofed |
 
-The tests drive the real in-memory adapters, with a `RecordingChannel` test double in place of WebSockets. To check that the suite catches real defects, deliberately planted bugs were each confirmed to fail it: PvP sent to the attacker, preferences ignored, preferences checked for the wrong player, bus failures not isolated, and the actor read from the payload. CI runs the suite and the demo on Python 3.10 and 3.13.
+The tests drive the real in-memory adapters, with a `RecordingChannel` test double in place of WebSockets. To check that the suite catches real defects, deliberately planted bugs were each confirmed to fail it: PvP sent to the attacker, preferences ignored, preferences checked for the wrong player, bus failures not isolated, and the actor read from the payload. The inbox got the same treatment: undelivered notifications not kept, inbox never replayed, and offline reported as delivered. CI runs the suite and the demo on Python 3.10 and 3.13.
 
 ### WebSocket protocol
 
@@ -206,7 +209,7 @@ The tests drive the real in-memory adapters, with a `RecordingChannel` test doub
 {"action": "set_preference", "category": "game" | "social", "enabled": false}
 ```
 
-**Server → client:** `{"type": "notification", "data": {...}}`, `{"type": "preferences", "data": {...}}` (sent on connect and after each change), `{"type": "ack", "action": "..."}` and `{"type": "error", "message": "..."}`. Invalid input returns an error message and the connection stays open.
+**Server → client:** `{"type": "notification", "data": {...}}`, `{"type": "preferences", "data": {...}}` (sent on connect and after each change), `{"type": "missed", "data": [...]}` (sent on connect if anything arrived while offline), `{"type": "ack", "action": "..."}` and `{"type": "error", "message": "..."}`. Invalid input returns an error message and the connection stays open.
 
 ---
 

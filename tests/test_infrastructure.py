@@ -8,6 +8,7 @@ from src.domain.events import BaseEvent, LevelUpEvent, NewFollowerEvent
 from src.domain.notification import Notification, NotificationCategory
 from src.infrastructure.channels.websocket_channel import WebSocketChannel
 from src.infrastructure.memory_event_bus import InMemoryEventBus
+from src.infrastructure.memory_inbox import InMemoryNotificationInbox
 from src.infrastructure.memory_prefs_repo import InMemoryPreferenceRepository
 
 # --------------------------------------------------------------------------- #
@@ -91,6 +92,31 @@ async def test_repository_persists_per_player():
 
 
 # --------------------------------------------------------------------------- #
+# Notification inbox
+# --------------------------------------------------------------------------- #
+
+
+async def test_inbox_returns_pending_oldest_first_per_player_and_clears():
+    inbox = InMemoryNotificationInbox()
+    first, second, other = _notification(1), _notification(1), _notification(2)
+    for n in (first, second, other):
+        await inbox.add(n)
+
+    assert await inbox.drain(1) == [first, second]
+    assert await inbox.drain(1) == []
+    assert await inbox.drain(2) == [other]
+
+
+async def test_inbox_keeps_only_the_most_recent_per_player():
+    inbox = InMemoryNotificationInbox(max_per_player=2)
+    notifications = [_notification(1) for _ in range(3)]
+    for n in notifications:
+        await inbox.add(n)
+
+    assert await inbox.drain(1) == notifications[1:]
+
+
+# --------------------------------------------------------------------------- #
 # WebSocket channel
 # --------------------------------------------------------------------------- #
 
@@ -123,7 +149,7 @@ async def test_channel_delivers_to_every_socket_of_the_recipient_only():
     channel.register(1, tab_b)
     channel.register(2, other)
 
-    await channel.send(_notification(recipient_id=1))
+    assert await channel.send(_notification(recipient_id=1)) is True
 
     assert len(tab_a.messages) == len(tab_b.messages) == 1
     assert other.messages == []
@@ -132,11 +158,16 @@ async def test_channel_delivers_to_every_socket_of_the_recipient_only():
     assert message["data"]["recipient_id"] == 1
 
 
-async def test_channel_drops_notifications_for_offline_players(caplog):
+async def test_channel_reports_offline_players_as_not_delivered():
+    assert await WebSocketChannel().send(_notification(recipient_id=9)) is False
+
+
+async def test_channel_reports_not_delivered_when_every_socket_is_dead():
     channel = WebSocketChannel()
-    with caplog.at_level(logging.INFO):
-        await channel.send(_notification(recipient_id=9))  # must not raise
-    assert "offline" in caplog.text
+    channel.register(1, FakeSocket(broken=True))
+
+    assert await channel.send(_notification()) is False
+    assert not channel.is_online(1)
 
 
 async def test_channel_removes_dead_sockets_and_keeps_healthy_ones():

@@ -5,9 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from src.infrastructure.memory_event_bus import InMemoryEventBus
+from src.infrastructure.memory_inbox import InMemoryNotificationInbox
 from src.infrastructure.memory_prefs_repo import InMemoryPreferenceRepository
 from src.ports.event_bus import IEventBus
 from src.ports.notification_channel import INotificationChannel
+from src.ports.notification_inbox import INotificationInbox
 from src.ports.preference_repository import IPreferenceRepository
 from src.producers.game_engine import GameEngine
 from src.producers.social_system import SocialSystem
@@ -18,6 +20,7 @@ from src.services.router import NotificationRouter
 class NotificationSystem:
     bus: IEventBus
     preferences: IPreferenceRepository
+    inbox: INotificationInbox
     router: NotificationRouter
     game: GameEngine
     social: SocialSystem
@@ -31,11 +34,13 @@ def build_system(channel: INotificationChannel) -> NotificationSystem:
     """
     bus = InMemoryEventBus()
     preferences = InMemoryPreferenceRepository()
-    router = NotificationRouter(preferences, channel)
+    inbox = InMemoryNotificationInbox()
+    router = NotificationRouter(preferences, channel, inbox)
     router.subscribe_to(bus)
     return NotificationSystem(
         bus=bus,
         preferences=preferences,
+        inbox=inbox,
         router=router,
         game=GameEngine(bus),
         social=SocialSystem(bus),
