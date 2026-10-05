@@ -1,169 +1,173 @@
-# Prompt Log
+# AI Development Workflow & Prompt Log
 
-A running record of the prompts and decisions behind this project, written alongside the work so that `AI_WORKFLOW.md` describes what actually happened.
+This document records the prompt history, architectural decisions and engineering iterations behind the Real-Time Notification System. For the narrative view (who decided what, and how AI output was verified), see [`AI_WORKFLOW.md`](../AI_WORKFLOW.md).
 
-**Tooling:** Claude Code (Claude Opus 5.5) in the Claude desktop app, working directly in this repository.
+## Tooling & Process Overview
+
+* **AI tooling:** Claude Code (Claude Opus 5.5) in the Claude desktop app. It was used for planning, implementation, test generation, browser-based UI testing and git.
+* **Workflow:** phase-gated, specification-driven development. Each phase ended with verification and a human review before the next began:
+  Domain & Ports → In-Memory Adapters → Router & Strategies → Application & Dashboard → Test Suite & CI → Documentation → Extensions → Verification & Hardening.
+* **Core goal:** a decoupled, zero-infrastructure, event-driven notification service. It installs with `pip install -e ".[dev]"`, runs with `uvicorn main:app` (live dashboard) or `python demo.py` (headless), and is covered by 68 tests that CI runs on Python 3.10 and 3.13.
+* **Prompt format:** prompts are condensed to their intent. The full opening brief is reproduced in `AI_WORKFLOW.md`.
 
 ---
 
-## Prompt 1: Architecture brief and phased plan
+## Engineering Execution & Prompt History
 
-**Human input:** I designed the architecture before writing any code: DDD, Ports & Adapters (Hexagonal), and an event-driven pipeline. Constraints:
-- Python 3.10+, FastAPI, Pydantic v2, Pytest.
-- In-memory only: no Redis, no Postgres.
-- Producers (`GameEngine`, `SocialSystem`) must not know about notifications. They only emit events to an `IEventBus`.
-- Strategy pattern for formatting events into notifications. Adapter pattern for delivery channels.
-- A fixed target directory layout, built in six phases with a human review after each one.
+### Phase 0: Requirements Analysis & Architecture Brief
 
-> "Help me implement this codebase step-by-step. Do not generate the entire project at once. Wait for my confirmation after each phase."
+**Prompt:**
+> "Act as a Principal Python Engineer. Implement a real-time notification system for a gaming platform using Domain-Driven Design, Ports & Adapters and an event-driven pipeline, step by step, stopping for review after each phase.
+> Constraints: Python 3.10+, FastAPI, Pydantic v2, pytest. In-memory infrastructure only: no Redis, no Postgres. Producers (`GameEngine`, `SocialSystem`) must not know about notifications and may only emit events to an `IEventBus`. Strategy pattern for formatting; Adapter pattern for delivery channels."
 
-**AI contribution:** Read the challenge PDF first and checked the brief against it. Then produced a Phase 1 plan for review.
+**AI contributions:**
+* Read the challenge PDF *before* planning and compared it with the brief. It found two missing required events (**Challenge Completed** and **New Follower**) and an ambiguous trigger: `friendRequestAccepted(1, 3)` means player 1 accepted, so player **3** is notified.
+* Produced a read-only Phase 1 plan for approval before writing any code.
 
-**Gaps the AI flagged, approved by me:**
-- The PDF requires **Challenge Completed** and **New Follower** events, which my brief left out. Added both.
-- `friendRequestAccepted(1, 3)` means player 1 accepted player 3's request, so player 3 is notified. Field names (`accepter_id`, `requester_id`) make the direction explicit.
+**Follow-up prompt (plan audit):**
+> "Before Phase 2, audit the plan against the PDF. Does the service need to be containerized? Flag anything over- or under-engineered; every decision will be defended in a technical interview."
 
-**Design decisions recorded:**
-- Events carry facts only, with no category or recipient. The formatting strategies decide both, which keeps producers fully decoupled.
-- Each event has a fixed `event_type`, so `parse_event()` turns raw JSON into the correct typed event.
-- All ports are async, so a database or broker adapter could replace the in-memory ones without changing the interfaces.
+**AI review outcome (approved):**
+* Add thin `GameEngine` / `SocialSystem` producers, because the PDF's example usage literally calls them.
+* Add a headless `demo.py` so reviewers can verify the system without a browser.
+* Notify only for rare or better items, since the spec says "rare or valuable".
+* Add CI. Docker is optional (later dropped; see Phase 4).
 
-## Prompt 2: Review of the plan against the brief (before Phase 2)
+---
 
-**Human input:** Asked whether the project should be containerized and whether the AI had read the challenge. Shared the delivery repo. Stressed that the interview evaluates the process and the defence of design decisions, so the design must be correct and neither over- nor under-engineered.
+### Phase 1: Domain Model & Ports
 
-**AI review, all items approved by me:**
-- **Containerization:** not required by the brief ("build scripts you provide"). Add one small Dockerfile for reproducibility. No compose file or extra infrastructure.
-- **Missing producers:** add `GameEngine` and `SocialSystem` classes that expose the PDF's exact trigger methods and only publish events.
-- **Headless demo:** add `demo.py`, which runs the PDF's four example triggers without needing a browser.
-- **"Rare or valuable" items:** the formatter skips COMMON items.
-- **Extra tests:** a WebSocket end-to-end test, and a test that a failing subscriber is isolated from the others.
-- **CI:** a minimal GitHub Actions workflow that runs pytest.
-- **Offline players:** notifications are dropped and logged. This is a documented tradeoff; a persistent inbox is listed as an extension point.
-- **Git:** one commit per phase. The challenge PDF is kept out of the public repo.
+**Prompt:**
+> "Implement the domain layer and the ports: the notification model and categories, the domain events, the player preferences, and abstract `IEventBus`, `IPreferenceRepository` and `INotificationChannel` interfaces."
 
-## Prompt 3: "Push Phase 1 and start Phase 2"
+**AI contributions & key decisions:**
+* **Events carry facts only.** There is no category, recipient or text on an event. The formatting strategy decides all three, so producers stay fully decoupled from notification concerns.
+* Immutable (frozen) Pydantic models throughout. `NotificationPreferences.with_category()` returns a new copy instead of mutating.
+* **Opt-out preferences:** every category is enabled unless the player turns it off.
+* **Async ports** everywhere, so a database or broker adapter can replace the in-memory ones without changing the interfaces.
 
-**AI contribution:** Initialized git, pushed Phase 1, then implemented the in-memory adapters.
+---
 
-**Design decisions:**
-- **Event bus:** subscriptions match with `isinstance`, so subscribing to `BaseEvent` receives every event. `publish` awaits all handlers concurrently with `asyncio.gather(return_exceptions=True)`, so a failing handler is logged and isolated. Delivery is at-most-once and in-process; a real broker is a drop-in adapter.
-- **Preference repository:** a plain dict of immutable values. No lock is needed on a single event loop. Unknown players get the defaults.
-- **WebSocket channel:** keeps a *set* of sockets per player, so multiple tabs work. The endpoint owns the handshake and the channel only delivers. Dead sockets are removed when a send fails. Offline players' notifications are dropped and logged, as agreed.
-- **Message envelope:** `{"type": "notification", "data": {...}}`, so the dashboard can later receive other message types (acks, errors) on the same socket.
-- Added `.gitattributes` so line endings stay LF across Windows and Linux (needed for Docker and CI).
+### Phase 2: In-Memory Infrastructure Adapters
 
-**Verification:** an ad-hoc script checked handler isolation, catch-all subscriptions, preference opt-out, delivery to two tabs over a real FastAPI WebSocket (`TestClient`), unregistering on disconnect, and the offline drop path. The dead-socket path (a send that fails) gets a dedicated test in Phase 5.
+**Prompt:**
+> "Approved. Commit and push Phase 1, then implement the in-memory adapters: the event bus, the preference repository and the WebSocket channel."
 
-## Prompt 4: "Add README as well, commit and push"
+**AI contributions & key decisions:**
+* `InMemoryEventBus`: subscriptions match with `isinstance` (subscribing to `BaseEvent` catches everything). Handlers run concurrently with `asyncio.gather(return_exceptions=True)`, so **a failing subscriber is logged and isolated** and never breaks the others.
+* `WebSocketChannel`: keeps a set of sockets per player (multi-tab support) and removes dead sockets when a send fails. The HTTP endpoint owns the handshake; the channel only delivers.
+* Message envelope `{"type": ..., "data": ...}`, so one socket can carry notifications, acknowledgements and errors.
+* `.gitattributes` keeps line endings LF across Windows and Linux.
 
-**AI contribution:** Wrote a README that describes only what exists so far: features, an architecture diagram, layer responsibilities, key decisions, a tradeoffs table, and a roadmap. Unbuilt features are marked as upcoming phases. It will be updated as each phase lands and finalized in Phase 6. `readme` was restored in `pyproject.toml`, and a wheel build confirmed the packaging metadata is valid.
+---
 
-## Prompt 5: Phase 3, router and strategies
+### Phase 3: Notification Router, Strategies & Producers
 
-**AI contribution:** Implemented the formatting strategies, the `NotificationRouter` and the `GameEngine` / `SocialSystem` producers.
+**Prompt:**
+> "Add a README that documents only what exists so far, commit and push, then implement the formatting strategies, the `NotificationRouter`, and the `GameEngine` / `SocialSystem` producers."
 
-**Design decisions:**
-- **Strategies are plain functions** in a registry (`DEFAULT_FORMATTERS`: event type → function). Each one decides the recipient, the category and the text. Returning `None` means "no notification" (used for COMMON items). Adding an event means one new function and one registry entry.
-- **The router depends only on ports.** `subscribe_to(bus)` registers the router for every type that has a strategy. The pipeline is format → preferences check → send. The formatter registry can be injected (useful for tests and extension).
-- **Producers use the PDF's trigger names, written in Python style** (`player_leveled_up(1, 15)` and so on). They import only the events and `IEventBus`; this was verified by grep.
-- **New domain invariant:** a player can't target themselves in two-player events. The AI's first version used underscore attributes, which Pydantic treats as private instance attributes. It caught this itself and switched to an explicit `ClassVar[tuple[str, str]]` on a shared base class.
-- **Kept deliberately simple:** a strategy returns at most one notification, and the router sends to a single channel. Fan-out to several recipients, or a composite channel for push plus in-app, are documented extension points rather than built features.
+**AI contributions & key decisions:**
+* **Strategy registry:** one pure function per event type, mapped in `DEFAULT_FORMATTERS`. Each decides the recipient, category and message. Returning `None` means "don't notify" (common items).
+* **Router pipeline:** format → check preferences → send. It depends only on ports, and the formatter registry is injectable.
+* **Recipient targeting:** preferences are checked against the **recipient**, never the actor. Friend requests notify the target; acceptances notify the original requester; PvP attacks notify the defender only.
+* **Domain invariant:** two-player events reject self-targeting (a player can't befriend, follow or attack themselves).
+* **Self-correction:** the first version of that validator used underscore attributes, which Pydantic treats as private instance attributes. It was caught in review and replaced with an explicit `ClassVar`.
+* Producers import only events and `IEventBus`, verified by grep.
 
-**Verification:** a scripted run of the four PDF triggers, plus the extra events, the common-item filter and a SOCIAL opt-out, all through the real bus and router with a recording channel. All eight expected notifications were delivered, and the two suppressed cases were dropped.
+---
 
-## Prompt 6: Phase 4, application entrypoint and dashboard
+### Phase 4: Application Entrypoint & Live Dashboard
 
-**Human correction mid-phase:** "We said we don't need Docker." The brief only asks for build scripts, so the Dockerfile was **dropped** from scope. This reverses the earlier "small Dockerfile" item; running is `pip install` plus `uvicorn`.
+**Prompt:**
+> "Implement the FastAPI application and the two-player dashboard. Docker is out of scope; the brief only asks for build scripts."
 
-**AI contribution:**
-- **`src/bootstrap.py`:** a composition root, `build_system(channel)`, shared by the server and the demo. The delivery channel is injected.
-- **`main.py`:** `create_app()` factory, so tests get a fresh state per app. Provides `/` (dashboard), `/health` and `/ws/{player_id}`. Actions are dispatched with `match` to the `GameEngine` / `SocialSystem` producers. **The actor always comes from the connection, never from the payload.** Invalid JSON, unknown actions, missing fields and domain validation errors (e.g. attacking yourself, level 0) return `{"type": "error"}` and the socket stays open.
-- **`ConsoleChannel` + `demo.py`:** a headless run of the PDF triggers. It is a second adapter for the same router, a concrete example of the Adapter pattern.
-- **`Notification.actor_id` (optional):** added so the client can act on a notification (the **Accept** button on friend requests needs the sender's ID).
-- **`static/index.html`:** Tailwind and vanilla JavaScript. Two panels built from a `<template>`, preference toggles, game and social actions, a live feed, inline Accept, and a Disconnect button that demonstrates the offline-drop tradeoff. All server text is inserted with `textContent` (no XSS through item names).
+**AI contributions & key decisions:**
+* `create_app()` factory, with a composition root in `src/bootstrap.py` shared by the server and `demo.py`. The delivery channel is injected (`WebSocketChannel` for the server, `ConsoleChannel` for the demo), which shows the Adapter pattern in action.
+* `/ws/{player_id}` dispatches dashboard actions to the producers. **The acting player comes from the connection, never from the payload**, so clients can't impersonate another player.
+* Invalid JSON, unknown actions, missing fields and domain violations return `{"type": "error"}`, and the socket stays open.
+* An optional `actor_id` on `Notification` lets clients act on a notification (an inline **Accept** on friend requests).
+* Dashboard: Tailwind and vanilla JavaScript. All server text is inserted with `textContent`, so there is no XSS through item names.
 
-**Verification:**
-- `python demo.py` output matched the PDF examples.
-- A `TestClient` script covered the full protocol and 8 malformed-input cases.
-- A manual browser run covered the attack (defender only), friend request → Accept → requester notified, Social off (follow suppressed, attack delivered), Disconnect (controls disabled, status shows drops) and multi-tab fan-out (the logs showed two sockets per player).
+**Verification:** the PDF triggers were run headless, the WebSocket protocol was scripted including 8 malformed inputs, and a manual browser run covered attack → defender only, friend request → accept, and the Social opt-out.
 
-## Prompt 7: "Remove parse_event and start Phase 5"
+---
 
-**Human decision:** remove `parse_event()`. After Phase 4, the endpoint calls the producers directly, so the discriminated-union parser had become dead code.
+### Phase 5: Automated Test Suite & CI
 
-**AI contribution: test suite (57 tests) and CI**
-- **`conftest.py`:** real in-memory bus and repository, a `RecordingChannel` test double, producer fixtures, and an `opt_out` helper.
-- **`test_router.py` (the brief's three required tests, plus more):** PDF triggers formatted and delivered; SOCIAL opt-out drops friend requests but allows level-ups; PvP goes strictly to the defender. Also covered: the GAME opt-out, opt-out being per player, preferences checked for the *recipient* (not the actor), re-enabling a category, and an **extensibility test**, where a brand-new `GuildInviteEvent` is delivered by adding only a strategy.
-- `test_formatters.py`, `test_domain.py`, `test_infrastructure.py` (including the dead-socket test promised in Phase 2) and `test_app.py` (real WebSocket sessions through `create_app()`).
-- **Mutation check:** five realistic bugs were planted one at a time (PvP to the attacker, preferences ignored, preferences checked for the wrong player, bus failures not isolated, actor read from the payload). Each was caught by a failing test, then reverted.
-- **CI:** GitHub Actions runs `pytest` and `python demo.py` on Python 3.10 (the minimum supported) and 3.13.
+**Prompt:**
+> "Remove `parse_event`, which is unused now that the endpoint calls the producers. Then build the pytest suite: formatting and delivery, SOCIAL opt-out dropping friend requests but not level-ups, and PvP routed strictly to the defender. Add CI."
 
-**Issues the AI caught in its own work:**
-- The first `test_app.py` helper entered the WebSocket context manager twice. It was replaced with a `@contextmanager`.
-- A test that inspected the bus's private `_handlers` was dropped, because it tested implementation details instead of behaviour.
+**AI contributions & key decisions:**
+* Fixtures use the **real** in-memory adapters plus a `RecordingChannel` test double.
+* Beyond the three required tests: GAME opt-out, per-player opt-out, recipient-based preference checks, re-enabling a category, and an **extensibility test** where a brand-new `GuildInviteEvent` is delivered by adding only a strategy.
+* `test_app.py` drives real WebSocket sessions through `create_app()`.
+* **Mutation check:** realistic bugs were planted one at a time (PvP sent to the attacker, preferences ignored, preferences checked for the wrong player, bus failures not isolated, actor read from the payload). The suite caught every one.
+* GitHub Actions runs the suite and the demo on Python 3.10 and 3.13.
+* **Self-correction:** a test helper entered the WebSocket context manager twice (fixed), and a test that inspected private bus internals was removed in favour of behavioural coverage.
 
-**Environment notes:**
-- Starlette 1.x warns that `httpx` is deprecated for its TestClient. That single warning is filtered in `pyproject.toml` so the dependency range stays wide.
-- A clean virtual environment install (`pip install -e ".[dev]"` → `pytest` → `demo.py`) was verified to mirror what a reviewer does.
+---
 
-## Prompt 8: "You push it and start Phase 6"
+### Phase 6: Documentation
 
-**AI contribution:** Pushed Phase 5 and confirmed through the GitHub API that the first CI run passed on **Python 3.10 and 3.13** (install, pytest, demo). This was the first real check of 3.10 compatibility, since only 3.13 was available locally.
+**Prompt:**
+> "Push Phase 5 and write the final README and `AI_WORKFLOW.md`."
 
-**Documentation:**
-- **`AI_WORKFLOW.md`:** tools, the gated workflow, who did what, every prompt in order, where AI review improved the plan, where human oversight changed the outcome (Docker reversal, dead-code removal, the git-identity incident), the AI's self-caught mistakes, the verification approach, and lessons learned. It was built from this log rather than from memory. The AI corrected its own first draft of the prompt table to match the real sequence of prompts.
-- **README, final pass:** a requirements-coverage table (PDF requirement → file), an "Extending the system" table for the interview's what-if questions (new event, new channel, offline inbox, horizontal scaling, reliability, batching), missing authentication added as an explicit tradeoff, and the in-progress roadmap replaced with a "How it was built" summary.
+**AI contributions:** a requirements-coverage table (PDF requirement → file), an "Extending the system" section covering likely interview scenarios, missing authentication documented as an explicit tradeoff, and a workflow document built from this log rather than from memory.
 
-## Prompt 9: "All done? … have we done that?" (quoting the PDF's example triggers)
+---
 
-**Human check:** I asked whether the PDF's four example triggers were covered.
+### Phase 7: Requirement Audit & Extensions
 
-**AI answer:** Yes, in `tests/test_router.py` and `demo.py`. However, both passed an explicit `ItemRarity.LEGENDARY` to `item_acquired`, to match the PDF's sample message "legendary Sword of Azeroth". The PDF's literal call `itemAcquired(2, "SwordOfAzeroth")` has no rarity argument and wasn't tested exactly as written. Added `test_pdf_example_triggers_work_exactly_as_written`: all four calls argument for argument. Without a rarity, the item defaults to RARE and is still notified. The suite now has 58 tests.
+**Prompts:**
+> "Confirm the PDF's four example triggers are covered exactly as written."
 
-## Prompt 10: optional extras ("is these important?")
+> "Assess three optional extensions: event deduplication, an offline inbox, and a PvP defeat event that notifies both players."
 
-**Human input:** Shared three optional ideas: event deduplication, an offline notification inbox, and `PvPDefeatedEvent` notifying both players.
+> "Implement the PvP defeat event and the offline inbox. Players coming back online should see what they missed."
 
-**AI assessment:**
-- **Deduplication: skip.** The in-process bus delivers exactly once and nothing retries, so duplicates can't occur. The guard would be dead code with an ever-growing ID set. It stays as an interview answer (the README's Reliability row).
-- **Inbox:** the only extra that fixes a real weakness (offline drops). It's worth building if there's time.
-- **PvP defeat:** the PDF says "attacked **or defeated**". Build it, but notify **only the loser**, mirroring attack → defender. Notifying both players would change every formatter's return type for a nice-to-have.
+**AI contributions & key decisions:**
+* Added a test that runs `playerLeveledUp(1, 15)`, `itemAcquired(2, "SwordOfAzeroth")`, `friendRequestSent(3, 1)` and `friendRequestAccepted(1, 3)` **argument for argument**. Earlier tests had passed an explicit item rarity.
+* **Deduplication: declined.** The in-process bus delivers exactly once and nothing retries, so duplicates can't occur. It is documented as a requirement only once a real broker is introduced.
+* **`PvPDefeatedEvent`: simplified to notify the loser only**, mirroring attack → defender. One event, one formatter, and no router change. The existing "every event has a strategy" test flagged the new event immediately.
+* **Offline inbox:**
+  * A new `INotificationInbox` port with a bounded in-memory adapter (latest 50 per player).
+  * `INotificationChannel.send()` now reports whether delivery succeeded, and the router keeps undelivered notifications.
+  * Opted-out notifications are never stored.
+  * On connect, the endpoint replays missed notifications as `{"type": "missed"}`, and the dashboard labels them.
+  * Scope was widened from "social events" to **every** missed notification the player hasn't opted out of, since a missed attack matters too.
+* **Self-correction:** the first mutation run **hung** instead of failing (a test waited for a message that never came). The test now triggers a reply first so a missing replay fails fast, and mutation runs use a timeout.
 
-**Human decision:** build #3 as suggested and #2 as well ("after coming online, social events should be visible").
+---
 
-**#3 delivered:** `PvPDefeatedEvent(winner_id, loser_id)`, one formatter, a `GameEngine.player_defeated` method, a `"defeat"` action, a dashboard button, and the demo line. No router change was needed. The existing `test_every_domain_event_has_a_strategy` immediately required the new formatter, and new tests cover routing to the loser only, self-targeting rejected and the WebSocket round trip (61 tests).
+### Phase 8: Verification & Hardening
 
-**#2 delivered: offline inbox.**
-- **Port:** `INotificationInbox` (`add` / `drain`). **Adapter:** `InMemoryNotificationInbox`, which keeps the latest 50 per player.
-- `INotificationChannel.send()` now returns whether delivery succeeded. The WebSocket channel returns `False` when the player has no live socket, or when every socket was dead.
-- **Router:** `if not await channel.send(n): await inbox.add(n)`. The flow stays readable in one place; opted-out notifications are never stored.
-- **Endpoint:** on connect, drains the inbox and sends `{"type": "missed", "data": [...]}`. The dashboard tags these "Missed while offline", and Accept still works on a missed friend request.
-- **Scope widened by the AI:** you asked for social events after reconnecting. The inbox keeps every missed notification the player hasn't opted out of, because a missed attack matters too.
-- **Tests:** 68 in total. Planted bugs (undelivered not kept, never replayed, offline reported as delivered) were all caught. The first planted-bug run **hung**: the WebSocket test waited forever for a "missed" message that never came. The run was stopped, the mutated router was restored by hand, and the test was changed to trigger a reply first, so a missing replay fails fast. The check now runs with a timeout.
-- **Browser check:** Player 2 disconnects; Player 1 sends a friend request, a defeat and a follow; Player 2 reconnects and sees all three tagged as missed; Accept on the missed request notifies Player 1.
+**Prompts:**
+> "Live-test offline delivery: take each player offline in turn, send events from the other, and confirm everything arrives on reconnect. Then audit the code against the PDF and best practices."
 
-## Prompt 11: "Check all requirements and best practices; test by disconnecting both players one by one"
+> "The architecture diagram is hard to read. Fix it."
 
-**Live test (server restarted for clean state; log confirmed exactly one socket per player):**
-- **Round A:** Player 1 offline. Player 2 sent a friend request, an attack, a defeat and a follow, and leveled up (self). The server logged all four as "kept for later". On reconnect, Player 1 got exactly those four, tagged "Missed while offline"; the level-up didn't leak in. Accept on the missed request notified Player 2.
-- **Round B:** Player 2 turned Social **off**, then went offline. Player 1 sent a friend request, a follow, an attack and a defeat. The server logged both social events as suppressed (opted out) and kept only the attack and defeat. On reconnect, Player 2 got exactly those two, and the Social toggle came back off from the server.
-- **Edge case:** reconnecting both players again replayed nothing. No browser console errors and no server errors.
-- **Before testing:** an earlier attempt was paused because the server log showed a second Player 1 socket (the user's own tab). Testing then would have delivered live instead of going to the inbox. The AI stopped and asked rather than reporting a misleading result.
+> "Restructure the prompt log into a phase-by-phase format with an interview defense table."
 
-**Code review:** ran `ruff` (E, F, W, B, UP, SIM, I) and `mypy`. mypy was clean. Ruff's findings were typing modernizations for the 3.10 minimum (`X | None`, `collections.abc`) and `zip(strict=True)`, all applied and reviewed. Also removed a stale `Optional` annotation and unused `app.state` assignments. Ruff was added to the dev dependencies with a CI lint step.
+**AI contributions & verification results:**
+* **Clean test conditions first:** the server log showed a second, user-opened tab holding a Player 1 socket, which would have made "offline" untestable. The AI paused instead of reporting a misleading pass, then restarted the server for a clean state.
+* **Round A:** Player 1 offline. All four notifications from Player 2 were logged as kept and arrived on reconnect, labelled "Missed while offline". Player 2's own level-up did not leak in. Accept on a missed friend request worked.
+* **Round B:** Player 2 had Social off, then went offline. Social events were suppressed and only the game events were kept and replayed. The preference survived the reconnect. Reconnecting again replayed nothing. No console or server errors.
+* **Static analysis:** `mypy` was clean. `ruff` (E, F, W, B, UP, SIM, I) found only typing modernizations for the 3.10 floor; these were applied and reviewed, and ruff now runs in CI.
+* **Diagram:** the ASCII diagram had become inaccurate (it showed the channel writing to the inbox; the router does) and overflowed on GitHub. It was replaced with a Mermaid diagram, verified in light and dark themes under Mermaid's `strict` mode, as GitHub renders it.
 
-**Requirements re-checked against the PDF:** every listed event, channel, content, preference, handling and example-usage requirement is implemented and tested. The delivery requirements are also covered: the code runs from the documented commands, the GitHub repo is public, and the README and AI-usage documentation are in place.
+---
 
-## Prompt 12: "Why is the architecture diagram not well drawn?"
+## Key Architectural Trade-offs & Interview Defense Points
 
-**Human input:** Pointed out that the README's ASCII architecture diagram looked poor.
-
-**AI review:** Agreed, and found that it was also **inaccurate**. When the inbox was added, the diagram showed an arrow from the channel to the inbox, but in the code the *router* keeps undelivered notifications. Other problems: the inbox line was over 100 characters wide (it scrolled on GitHub), two labels floated without being attached to anything, and the console channel and the replay-on-connect path were missing.
-
-**Fix:** replaced it with a **Mermaid** diagram, which GitHub renders natively. Before committing, the AI rendered three layout iterations in the browser:
-- A top-down layout with groups had crossing edges.
-- Groups with side-by-side direction were ignored by Mermaid when edges crossed group borders.
-- The final plain left-to-right layout has no crossings, numbered steps (1 format · 2 enabled? · 3 send · 4 offline: keep) and a one-paragraph legend.
-
-The final README block was verified in both light and dark themes with Mermaid's `strict` security level, the mode GitHub uses. HTML tags beyond `<br/>` were avoided because GitHub may show them as literal text.
+| Decision | Chosen solution | Alternative considered | Justification |
+| :--- | :--- | :--- | :--- |
+| **Delivery transport** | WebSockets behind `INotificationChannel` (plus a console adapter) | REST polling, Server-Sent Events | True push in real time. The port keeps the core transport-agnostic, so push or email are new adapters. |
+| **Event routing** | In-process async event bus | Kafka, RabbitMQ, Redis Streams | No infrastructure and deterministic tests. The `IEventBus` contract fits a broker adapter unchanged. |
+| **State persistence** | In-memory dictionaries (preferences, inbox) | SQLite, Postgres, Redis | Satisfies the brief's "simple map" with zero setup. Dependency inversion means a database adapter is a drop-in. |
+| **Where preferences are checked** | After formatting, before sending | Before formatting | The formatter decides the recipient and category, so the router can only check once it knows them. Formatters are cheap pure functions. |
+| **Offline players** | Bounded in-memory inbox, replayed once on connect | Drop; durable inbox with read receipts | Fixes the offline gap without infrastructure; the cap bounds memory. Production would use durable storage and acknowledgements. |
+| **PvP notifications** | Defender (attack) and loser (defeat) only | Notify both players | No router change; one recipient per event keeps formatters simple. Multi-recipient fan-out is a documented extension. |
+| **Duplicate events** | Not handled | Track processed `event_id`s | Exactly-once in-process delivery makes duplicates impossible. Deduplication becomes necessary with an at-least-once broker. |
+| **Actor identity** | Taken from the WebSocket connection | Taken from the message payload | Prevents a client from acting as another player. |
+| **Authentication** | None (player ID in the URL) | JWT on the WebSocket handshake | Out of scope for the exercise. Documented as the first production change. |
+| **Containerization** | Not included | Dockerfile | The brief asks for build scripts only; `pip` + `uvicorn` keeps the run path minimal. |

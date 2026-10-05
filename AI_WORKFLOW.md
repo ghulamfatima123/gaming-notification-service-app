@@ -43,7 +43,7 @@ How I used AI to go from the challenge brief to a working, tested system, and wh
 | 2 | In-memory adapters: event bus, preference repository, WebSocket channel |
 | 3 | Formatting strategies, `NotificationRouter`, `GameEngine` / `SocialSystem` producers |
 | 4 | FastAPI app, two-player live dashboard, headless `demo.py` |
-| 5 | 57 pytest tests and GitHub Actions CI |
+| 5 | pytest suite (68 tests today) and GitHub Actions CI |
 | 6 | README and this document |
 
 ## 3. Who did what
@@ -59,23 +59,26 @@ How I used AI to go from the challenge brief to a working, tested system, and wh
 
 ## 4. Prompts I used
 
-The full opening prompt is in the [Appendix](#appendix-the-opening-prompt). After that, my prompts were short, because the phase plan carried the context:
+The full opening brief is in the [Appendix](#appendix-the-opening-prompt). Later prompts were short, because the phase plan carried the context; they are shown condensed to their intent. The phase-by-phase detail is in [`docs/PROMPT_LOG.md`](docs/PROMPT_LOG.md).
 
-| # | My prompt (verbatim) | What happened |
+| # | Prompt (condensed) | What happened |
 |---|---|---|
-| 1 | The architecture brief and six-phase plan (Appendix) | The AI read the PDF first, compared it with my brief, and wrote a Phase 1 plan in read-only plan mode |
-| 2 | *"also do we need to containarize this have you read the challenge … we need to make sure everything we do is correct having the best system design and no over or under engineering"* | The AI reviewed the whole plan against the PDF and proposed 5 additions (see §5) |
-| 3 | *"yes agree with all, push phase 1 and start phase 2"* | Git initialized, Phase 1 pushed, in-memory adapters built |
-| 4 | *"add readme as well yes commit and push"* | README describing only what was built so far; Phase 2 pushed; Phase 3 (strategies, router, producers) built and held for review |
-| 5 | *"my gmail is … not that [work] one and why it is in the commit please dont"* | Repo-local identity set and history rewritten (see §6) |
-| 6 | *"… how much we have done and where are we standing at"* | A status summary: phases done, what's left, and GitHub being out of sync |
-| 7 | *"yes start phase 4"*, then mid-phase *"but we said we dont need docker"* | App, dashboard and demo built; Docker dropped from scope |
-| 8 | *(pasted the rejected `git push` output)* | The AI explained why (rewritten history), warned **not** to `git pull` (that would re-merge the old commits), and gave a `--force-with-lease` command pinned to the old commit |
-| 9 | *"pushed, remove parse_event and start phase 5"* | Unused code removed; 57 tests and CI added |
-| 10 | *"you push it and start phase 6"* | Phase 5 pushed; this documentation |
-| 11 | *"have we done that?"* (quoting the PDF's example triggers) | Both the tests and the demo passed an explicit rarity to `item_acquired`. The AI added a test that runs the four PDF calls **exactly as written**, closing that gap |
-| 12 | *"is these important?"* (three optional extras) | The AI recommended skipping deduplication (duplicates can't occur in this design), building a **simpler** PvP defeat (notify the loser only, no router change), and building the inbox only if time allowed |
-| 13 | *"yes do #3 PvPDefeatedEvent and i think 2 is also important if we can do after coming online social events should be visible"* | Both built. The AI widened "social events" to **every** missed notification the player hasn't opted out of, since a missed attack matters too |
+| 1 | The architecture brief and phased plan (Appendix) | The AI read the PDF first, compared it with my brief, and wrote a Phase 1 plan in read-only plan mode |
+| 2 | Audit the plan against the PDF: is containerization needed, and is anything over- or under-engineered? | The AI reviewed the whole plan and proposed 5 additions (see §5) |
+| 3 | Approved: push Phase 1, implement the in-memory adapters | Git initialized, Phase 1 pushed, adapters built |
+| 4 | Add a README for the current state, push, continue with Phase 3 | README added; Phase 2 pushed; strategies, router and producers built and held for review |
+| 5 | Commits must use my personal email, not the machine's work identity | Repo-local identity set and history rewritten (see §6) |
+| 6 | Summarize progress and remaining work | A status report, including GitHub being out of sync after the rewrite |
+| 7 | Proceed with Phase 4; Docker is out of scope | App, dashboard and demo built; Dockerfile dropped |
+| 8 | Push was rejected after the history rewrite: how to resolve? | The AI explained why, warned **not** to `git pull` (that would re-merge the old commits), and gave a `--force-with-lease` command pinned to the old commit |
+| 9 | Remove the unused `parse_event`, then build the test suite and CI | Dead code removed; tests and CI added |
+| 10 | Push Phase 5 and write the final documentation | README and this document |
+| 11 | Confirm the PDF's example triggers are covered exactly as written | Earlier tests passed an explicit item rarity; a test now runs the four PDF calls **argument for argument** |
+| 12 | Assess three optional extensions: deduplication, an offline inbox, PvP defeat notifying both players | The AI recommended skipping deduplication (duplicates can't occur in this design), a **simpler** PvP defeat (notify the loser only, no router change), and the inbox if time allowed |
+| 13 | Build the PvP defeat event and the offline inbox; returning players should see what they missed | Both built. Scope widened from social events to **every** missed notification the player hasn't opted out of |
+| 14 | Live-test offline delivery for both players, then audit against the PDF and best practices | Two clean live-test rounds passed; `ruff` + `mypy` added as checks, ruff in CI |
+| 15 | The architecture diagram is hard to read: fix it | The ASCII diagram was also inaccurate; replaced with a verified Mermaid diagram |
+| 16 | Restructure the prompt log into a phase-by-phase format with an interview defense table | `docs/PROMPT_LOG.md` rewritten in that format |
 
 ## 5. Where AI review improved my plan
 
@@ -89,7 +92,7 @@ Before writing code, I asked the AI to check my brief against the PDF. It found 
 
 ## 6. Where human oversight changed the outcome
 
-- **Docker: approved, then reversed.** The AI suggested a small optional Dockerfile and I first agreed. Mid-Phase 4, I pushed back ("we said we don't need docker"). The brief only asks for build scripts, so it was dropped. That's one less thing to maintain and defend.
+- **Docker: approved, then reversed.** The AI suggested a small optional Dockerfile and I first agreed. Mid-Phase 4, I pushed back and took it out of scope. The brief only asks for build scripts, so it was dropped. That's one less thing to maintain and defend.
 - **Removing dead code.** After Phase 4, the WebSocket endpoint called the producers directly, which left a typed-JSON parser (`parse_event`) from Phase 1 unused. The AI asked whether to keep it with tests or remove it. I chose to remove it rather than defend unused code.
 - **Git identity.** The AI committed using the machine's global git identity, which was my work email, and pushed it to my public repo. I caught it. The fix was a repo-local `user.email`, a history rewrite that kept the original dates, and a force-push. The AI's safety guard **blocked it from force-pushing on its own**, so I ran the push myself. Lesson: check the commit identity before the first commit in any repo; the AI now does this by default.
 - **The offline inbox was my call.** The design originally dropped notifications for offline players, as a documented tradeoff. After the core was done, I decided players should see what they missed. The AI built it behind a new port (`INotificationInbox`), so the router change is three lines: "if the channel couldn't deliver it, keep it". It also planted bugs to prove the new tests guard it.
@@ -114,7 +117,7 @@ Code that only *looked* right was never accepted. Each phase ended with evidence
 
 - **Phases 1–3:** scripted smoke runs through the real bus, router and preferences (e.g. the PDF triggers produced exactly the four expected messages).
 - **Phase 4:** a `TestClient` script exercising the full WebSocket protocol, including 8 malformed inputs. A live browser session covering an attack (defender only), friend request → Accept → requester notified, Social opt-out, Disconnect, and two tabs per player.
-- **Phase 5:** 57 tests plus a **mutation check**. Five realistic bugs were planted one at a time, and the suite caught every one:
+- **Phase 5:** the test suite (57 tests then, 68 now) plus a **mutation check**. Five realistic bugs were planted one at a time, and the suite caught every one:
   - PvP sent to the attacker
   - preferences ignored
   - preferences checked for the wrong player
