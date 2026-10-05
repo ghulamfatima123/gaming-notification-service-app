@@ -27,6 +27,7 @@ from src.domain.events import (
     LevelUpEvent,
     NewFollowerEvent,
     PvPAttackedEvent,
+    PvPDefeatedEvent,
 )
 from src.domain.notification import Notification, NotificationCategory
 
@@ -98,6 +99,17 @@ def format_pvp_attacked(event: PvPAttackedEvent) -> Notification:
     )
 
 
+def format_pvp_defeated(event: PvPDefeatedEvent) -> Notification:
+    return Notification(
+        recipient_id=event.loser_id,
+        actor_id=event.winner_id,
+        category=NotificationCategory.GAME,
+        event_type=event.event_type,
+        title="Defeated!",
+        message=f"Player '{event.winner_id}' has defeated you!",
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Social strategies
 # --------------------------------------------------------------------------- #
@@ -145,6 +157,7 @@ DEFAULT_FORMATTERS: dict[type[BaseEvent], Formatter] = {
     ItemAcquiredEvent: format_item_acquired,
     ChallengeCompletedEvent: format_challenge_completed,
     PvPAttackedEvent: format_pvp_attacked,
+    PvPDefeatedEvent: format_pvp_defeated,
     FriendRequestSentEvent: format_friend_request_sent,
     FriendRequestAcceptedEvent: format_friend_request_accepted,
     NewFollowerEvent: format_new_follower,

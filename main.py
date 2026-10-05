@@ -55,6 +55,8 @@ async def handle_action(
             await game.challenge_completed(player_id, str(message["challenge_name"]))
         case "attack":
             await game.player_attacked(player_id, int(message["target_id"]))
+        case "defeat":
+            await game.player_defeated(player_id, int(message["target_id"]))
         case "send_friend_request":
             await social.friend_request_sent(player_id, int(message["target_id"]))
         case "accept_friend_request":

@@ -11,6 +11,7 @@ from src.domain.events import (
     LevelUpEvent,
     NewFollowerEvent,
     PvPAttackedEvent,
+    PvPDefeatedEvent,
 )
 from src.domain.notification import Notification, NotificationCategory
 from src.domain.preferences import NotificationPreferences
@@ -23,6 +24,7 @@ SOCIAL = NotificationCategory.SOCIAL
     ("event_type", "fields"),
     [
         (PvPAttackedEvent, {"attacker_id": 1, "defender_id": 1}),
+        (PvPDefeatedEvent, {"winner_id": 1, "loser_id": 1}),
         (FriendRequestSentEvent, {"sender_id": 1, "recipient_id": 1}),
         (FriendRequestAcceptedEvent, {"accepter_id": 1, "requester_id": 1}),
         (NewFollowerEvent, {"follower_id": 1, "followee_id": 1}),

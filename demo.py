@@ -32,6 +32,7 @@ async def main() -> None:
     step("2. Other supported events")
     await game.challenge_completed(1, "Dragon Slayer")
     await game.player_attacked(attacker_id=1, defender_id=2)  # only the defender
+    await game.player_defeated(winner_id=1, loser_id=2)  # only the loser
     await social.new_follower(4, 1)
 
     step("3. Common items are not worth a notification")

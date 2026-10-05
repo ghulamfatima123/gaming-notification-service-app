@@ -120,3 +120,16 @@ A running record of the prompts and decisions behind this project, written along
 **Human check:** I asked whether the PDF's four example triggers were covered.
 
 **AI answer:** Yes, in `tests/test_router.py` and `demo.py`. However, both passed an explicit `ItemRarity.LEGENDARY` to `item_acquired`, to match the PDF's sample message "legendary Sword of Azeroth". The PDF's literal call `itemAcquired(2, "SwordOfAzeroth")` has no rarity argument and wasn't tested exactly as written. Added `test_pdf_example_triggers_work_exactly_as_written`: all four calls argument for argument. Without a rarity, the item defaults to RARE and is still notified. The suite now has 58 tests.
+
+## Prompt 10: optional extras ("is these important?")
+
+**Human input:** Shared three optional ideas: event deduplication, an offline notification inbox, and `PvPDefeatedEvent` notifying both players.
+
+**AI assessment:**
+- **Deduplication: skip.** The in-process bus delivers exactly once and nothing retries, so duplicates can't occur. The guard would be dead code with an ever-growing ID set. It stays as an interview answer (the README's Reliability row).
+- **Inbox:** the only extra that fixes a real weakness (offline drops). It's worth building if there's time.
+- **PvP defeat:** the PDF says "attacked **or defeated**". Build it, but notify **only the loser**, mirroring attack → defender. Notifying both players would change every formatter's return type for a nice-to-have.
+
+**Human decision:** build #3 as suggested and #2 as well ("after coming online, social events should be visible").
+
+**#3 delivered:** `PvPDefeatedEvent(winner_id, loser_id)`, one formatter, a `GameEngine.player_defeated` method, a `"defeat"` action, a dashboard button, and the demo line. No router change was needed. The existing `test_every_domain_event_has_a_strategy` immediately required the new formatter, and new tests cover routing to the loser only, self-targeting rejected and the WebSocket round trip (61 tests).

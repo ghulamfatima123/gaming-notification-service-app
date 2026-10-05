@@ -71,6 +71,14 @@ async def test_pvp_attack_is_routed_only_to_the_defender(game, channel):
     assert channel.for_player(1) == []
 
 
+async def test_pvp_defeat_is_routed_only_to_the_loser(game, channel):
+    await game.player_defeated(winner_id=1, loser_id=2)
+
+    assert [(n.recipient_id, n.actor_id, n.message) for n in channel.sent] == [
+        (2, 1, "Player '1' has defeated you!")
+    ]
+
+
 async def test_common_items_do_not_notify(game, channel):
     await game.item_acquired(1, "RustyDagger", ItemRarity.COMMON)
     assert channel.sent == []

@@ -10,6 +10,7 @@ from src.domain.events import (
     LevelUpEvent,
     NewFollowerEvent,
     PvPAttackedEvent,
+    PvPDefeatedEvent,
 )
 from src.domain.notification import Notification, NotificationCategory
 from src.domain.preferences import NotificationPreferences
@@ -27,4 +28,5 @@ __all__ = [
     "NotificationCategory",
     "NotificationPreferences",
     "PvPAttackedEvent",
+    "PvPDefeatedEvent",
 ]

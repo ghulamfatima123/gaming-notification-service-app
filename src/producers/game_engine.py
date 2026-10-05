@@ -8,6 +8,7 @@ from src.domain.events import (
     ItemRarity,
     LevelUpEvent,
     PvPAttackedEvent,
+    PvPDefeatedEvent,
 )
 from src.ports.event_bus import IEventBus
 
@@ -35,3 +36,6 @@ class GameEngine:
         await self._bus.publish(
             PvPAttackedEvent(attacker_id=attacker_id, defender_id=defender_id)
         )
+
+    async def player_defeated(self, winner_id: int, loser_id: int) -> None:
+        await self._bus.publish(PvPDefeatedEvent(winner_id=winner_id, loser_id=loser_id))

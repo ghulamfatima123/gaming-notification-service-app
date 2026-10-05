@@ -48,6 +48,13 @@ def test_attack_reaches_defender_and_not_attacker(client):
         assert p1.receive_json()["data"]["event_type"] == "level_up"
 
 
+def test_defeat_reaches_only_the_loser(client):
+    with player(client, 1) as p1, player(client, 2) as p2:
+        p1.send_json({"action": "defeat", "target_id": 2})
+        assert p1.receive_json() == {"type": "ack", "action": "defeat"}
+        assert p2.receive_json()["data"]["message"] == "Player '1' has defeated you!"
+
+
 def test_friend_request_accept_round_trip(client):
     with player(client, 1) as p1, player(client, 2) as p2:
         p1.send_json({"action": "send_friend_request", "target_id": 2})

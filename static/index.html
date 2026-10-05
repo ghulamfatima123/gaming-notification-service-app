@@ -75,6 +75,7 @@
             <button data-action="acquire_item" class="action-btn">Find an item</button>
             <button data-action="complete_challenge" class="action-btn">Complete a challenge</button>
             <button data-action="attack" class="action-btn"></button>
+            <button data-action="defeat" class="action-btn col-span-2"></button>
           </div>
         </div>
 
@@ -159,6 +160,7 @@
         this.ref.avatar.classList.add(accentClass);
         this.ref.name.textContent = `Player ${playerId}`;
         this.root.querySelector('[data-action="attack"]').textContent = `Attack Player ${opponentId}`;
+        this.root.querySelector('[data-action="defeat"]').textContent = `Defeat Player ${opponentId}`;
         this.root.querySelector('[data-action="send_friend_request"]').textContent = `Friend request to P${opponentId}`;
         this.root.querySelector('[data-action="follow"]').textContent = `Follow Player ${opponentId}`;
         this.renderLevel();
@@ -216,6 +218,8 @@
           }
           case "attack":
             return this.send({ action, target_id: this.opponent }, `Attacked Player ${this.opponent}`);
+          case "defeat":
+            return this.send({ action, target_id: this.opponent }, `Defeated Player ${this.opponent}`);
           case "send_friend_request":
             return this.send({ action, target_id: this.opponent }, `Sent a friend request to Player ${this.opponent}`);
           case "follow":

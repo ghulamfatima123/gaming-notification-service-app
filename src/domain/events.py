@@ -97,6 +97,15 @@ class PvPAttackedEvent(_TwoPlayerEvent):
     defender_id: int
 
 
+class PvPDefeatedEvent(_TwoPlayerEvent):
+    """``winner_id`` defeated ``loser_id`` in PvP combat."""
+
+    event_type: Literal["pvp_defeated"] = "pvp_defeated"
+    player_fields = ("winner_id", "loser_id")
+    winner_id: int
+    loser_id: int
+
+
 # --------------------------------------------------------------------------- #
 # Social events
 # --------------------------------------------------------------------------- #

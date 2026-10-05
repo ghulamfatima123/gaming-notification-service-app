@@ -21,6 +21,7 @@ Built with **Python 3.10+, FastAPI, and Pydantic v2**. Infrastructure is entirel
 | Item acquired (rare or better) | "You've acquired the legendary Sword of Azeroth!" |
 | Challenge completed | Quest or achievement completion |
 | PvP attacked | Sent to the **defender** only |
+| PvP defeated | Sent to the **loser** only |
 
 **Social events**
 | Event | Who is notified |
@@ -37,7 +38,7 @@ Built with **Python 3.10+, FastAPI, and Pydantic v2**. Infrastructure is entirel
 
 | Challenge requirement | Where it lives |
 |---|---|
-| In-game events (level up, item, challenge, PvP) | `src/domain/events.py`, `src/services/formatters.py` |
+| In-game events (level up, item, challenge, PvP attacked or defeated) | `src/domain/events.py`, `src/services/formatters.py` |
 | Social events (friend request, accepted, new follower) | Same, plus `src/producers/social_system.py` |
 | In-app, real-time channel | `src/infrastructure/channels/websocket_channel.py` and the dashboard |
 | Clear notification content | `formatters.py`. The PDF's example messages are asserted word for word in tests. |
@@ -168,7 +169,7 @@ Open <http://localhost:8000>. Player 1 and Player 2 appear side by side, each wi
 | Try this | What you'll see |
 |---|---|
 | **Level up**, **Find an item**, **Complete a challenge** | The notification appears in that player's own feed. Common items produce none. |
-| **Attack Player N** | Only the defender is notified. |
+| **Attack** / **Defeat Player N** | Only the defender (or loser) is notified. |
 | **Friend request** → **Accept** in the other feed | The original sender gets "accepted your friend request". |
 | Turn off **Social events**, then have the other player follow you | Nothing arrives. Game events still come through. |
 | **Disconnect** a player, then trigger events at them | The notifications are dropped (see Tradeoffs). |
@@ -201,7 +202,7 @@ The tests drive the real in-memory adapters, with a `RecordingChannel` test doub
 {"action": "level_up", "level": 16}
 {"action": "acquire_item", "item_name": "SwordOfAzeroth", "rarity": "legendary"}
 {"action": "complete_challenge", "challenge_name": "Dragon Slayer"}
-{"action": "attack" | "send_friend_request" | "accept_friend_request" | "follow", "target_id": 2}
+{"action": "attack" | "defeat" | "send_friend_request" | "accept_friend_request" | "follow", "target_id": 2}
 {"action": "set_preference", "category": "game" | "social", "enabled": false}
 ```
 
