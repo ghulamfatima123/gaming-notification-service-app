@@ -133,7 +133,7 @@ The design is Hexagonal (Ports & Adapters) with an event-driven pipeline. The co
 │   ├── infrastructure/       # memory_event_bus.py, memory_prefs_repo.py, channels/ (websocket, console)
 │   └── producers/            # game_engine.py, social_system.py
 ├── static/index.html         # live two-player dashboard
-├── tests/                    # pytest suite (57 tests)
+├── tests/                    # pytest suite (58 tests)
 ├── .github/workflows/ci.yml  # pytest + demo on Python 3.10 and 3.13
 ├── AI_WORKFLOW.md            # how AI was used, and where human judgment steered
 └── docs/PROMPT_LOG.md        # AI prompts and decisions, phase by phase

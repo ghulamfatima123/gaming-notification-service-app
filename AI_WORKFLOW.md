@@ -73,6 +73,7 @@ The full opening prompt is in the [Appendix](#appendix-the-opening-prompt). Afte
 | 8 | *(pasted the rejected `git push` output)* | The AI explained why (rewritten history), warned **not** to `git pull` (that would re-merge the old commits), and gave a `--force-with-lease` command pinned to the old commit |
 | 9 | *"pushed, remove parse_event and start phase 5"* | Unused code removed; 57 tests and CI added |
 | 10 | *"you push it and start phase 6"* | Phase 5 pushed; this documentation |
+| 11 | *"have we done that?"* (quoting the PDF's example triggers) | Both the tests and the demo passed an explicit rarity to `item_acquired`. The AI added a test that runs the four PDF calls **exactly as written**, closing that gap |
 
 ## 5. Where AI review improved my plan
 

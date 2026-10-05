@@ -33,6 +33,23 @@ async def test_pdf_example_triggers_are_formatted_and_delivered(game, social, ch
     ]
 
 
+async def test_pdf_example_triggers_work_exactly_as_written(game, social, channel):
+    """The brief's calls, argument for argument (no optional parameters)."""
+    await game.player_leveled_up(1, 15)  # gameEngine.playerLeveledUp(1, 15)
+    await game.item_acquired(2, "SwordOfAzeroth")  # gameEngine.itemAcquired(2, ...)
+    await social.friend_request_sent(3, 1)  # socialSystem.friendRequestSent(3, 1)
+    await social.friend_request_accepted(1, 3)  # socialSystem.friendRequestAccepted(1, 3)
+
+    assert [(n.recipient_id, n.event_type) for n in channel.sent] == [
+        (1, "level_up"),
+        (2, "item_acquired"),
+        (1, "friend_request_sent"),
+        (3, "friend_request_accepted"),
+    ]
+    # Without an explicit rarity the item counts as RARE, which is still notified.
+    assert channel.sent[1].message == "You've acquired the rare Sword of Azeroth!"
+
+
 async def test_challenge_and_follower_events_are_delivered(game, social, channel):
     await game.challenge_completed(1, "Dragon Slayer")
     await social.new_follower(follower_id=4, followee_id=1)

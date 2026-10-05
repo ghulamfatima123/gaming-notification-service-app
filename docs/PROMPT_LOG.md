@@ -114,3 +114,9 @@ A running record of the prompts and decisions behind this project, written along
 **Documentation:**
 - **`AI_WORKFLOW.md`:** tools, the gated workflow, who did what, every prompt in order, where AI review improved the plan, where human oversight changed the outcome (Docker reversal, dead-code removal, the git-identity incident), the AI's self-caught mistakes, the verification approach, and lessons learned. It was built from this log rather than from memory. The AI corrected its own first draft of the prompt table to match the real sequence of prompts.
 - **README, final pass:** a requirements-coverage table (PDF requirement → file), an "Extending the system" table for the interview's what-if questions (new event, new channel, offline inbox, horizontal scaling, reliability, batching), missing authentication added as an explicit tradeoff, and the in-progress roadmap replaced with a "How it was built" summary.
+
+## Prompt 9: "All done? … have we done that?" (quoting the PDF's example triggers)
+
+**Human check:** I asked whether the PDF's four example triggers were covered.
+
+**AI answer:** Yes, in `tests/test_router.py` and `demo.py`. However, both passed an explicit `ItemRarity.LEGENDARY` to `item_acquired`, to match the PDF's sample message "legendary Sword of Azeroth". The PDF's literal call `itemAcquired(2, "SwordOfAzeroth")` has no rarity argument and wasn't tested exactly as written. Added `test_pdf_example_triggers_work_exactly_as_written`: all four calls argument for argument. Without a rarity, the item defaults to RARE and is still notified. The suite now has 58 tests.
