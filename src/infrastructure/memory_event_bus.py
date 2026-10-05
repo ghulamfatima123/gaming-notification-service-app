@@ -43,7 +43,7 @@ class InMemoryEventBus(IEventBus):
         results = await asyncio.gather(
             *(handler(event) for handler in handlers), return_exceptions=True
         )
-        for handler, result in zip(handlers, results):
+        for handler, result in zip(handlers, results, strict=True):
             if isinstance(result, BaseException):
                 logger.error(
                     "Handler %r failed for %s (event_id=%s)",

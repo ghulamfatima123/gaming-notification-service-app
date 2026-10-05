@@ -138,7 +138,7 @@ The design is Hexagonal (Ports & Adapters) with an event-driven pipeline. The co
 │   └── producers/            # game_engine.py, social_system.py
 ├── static/index.html         # live two-player dashboard
 ├── tests/                    # pytest suite (68 tests)
-├── .github/workflows/ci.yml  # pytest + demo on Python 3.10 and 3.13
+├── .github/workflows/ci.yml  # ruff lint + pytest + demo on Python 3.10 and 3.13
 ├── AI_WORKFLOW.md            # how AI was used, and where human judgment steered
 └── docs/PROMPT_LOG.md        # AI prompts and decisions, phase by phase
 ```
@@ -194,7 +194,7 @@ pytest
 | `test_infrastructure.py` | Bus fan-out, catch-all subscriptions, failure isolation; repository defaults; inbox ordering, clearing and cap; WebSocket multi-tab delivery, delivery reporting, dead-socket cleanup |
 | `test_app.py` | Real WebSocket sessions: attack, defeat, missed notifications on reconnect, friend request → accept, preference toggle, 8 malformed inputs, the actor can't be spoofed |
 
-The tests drive the real in-memory adapters, with a `RecordingChannel` test double in place of WebSockets. To check that the suite catches real defects, deliberately planted bugs were each confirmed to fail it: PvP sent to the attacker, preferences ignored, preferences checked for the wrong player, bus failures not isolated, and the actor read from the payload. The inbox got the same treatment: undelivered notifications not kept, inbox never replayed, and offline reported as delivered. CI runs the suite and the demo on Python 3.10 and 3.13.
+The tests drive the real in-memory adapters, with a `RecordingChannel` test double in place of WebSockets. To check that the suite catches real defects, deliberately planted bugs were each confirmed to fail it: PvP sent to the attacker, preferences ignored, preferences checked for the wrong player, bus failures not isolated, and the actor read from the payload. The inbox got the same treatment: undelivered notifications not kept, inbox never replayed, and offline reported as delivered. CI lints with ruff, then runs the suite and the demo, on Python 3.10 and 3.13. The code also passes `mypy` with no errors.
 
 ### WebSocket protocol
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Mapping, Optional
+from collections.abc import Mapping
 
 from src.domain.events import BaseEvent
 from src.ports.event_bus import IEventBus
@@ -29,7 +29,7 @@ class NotificationRouter:
         preferences: IPreferenceRepository,
         channel: INotificationChannel,
         inbox: INotificationInbox,
-        formatters: Optional[Mapping[type[BaseEvent], Formatter]] = None,
+        formatters: Mapping[type[BaseEvent], Formatter] | None = None,
     ) -> None:
         self._preferences = preferences
         self._channel = channel

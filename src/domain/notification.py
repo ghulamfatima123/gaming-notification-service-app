@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -37,5 +36,5 @@ class Notification(BaseModel):
     event_type: str
     title: str
     message: str
-    actor_id: Optional[int] = None
+    actor_id: int | None = None
     created_at: datetime = Field(default_factory=_utcnow)

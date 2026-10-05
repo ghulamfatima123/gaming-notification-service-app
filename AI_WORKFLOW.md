@@ -120,6 +120,8 @@ Code that only *looked* right was never accepted. Each phase ended with evidence
   - preferences checked for the wrong player
   - bus failures not isolated
   - the acting player read from the client's payload
+- **Static checks:** `ruff` (lint, now also in CI) and `mypy` (types) both pass. Their only findings were Python 3.10 typing modernizations, with no bugs.
+- **Final live test (two rounds, fresh server):** each player went offline in turn while the other sent events. All missed notifications arrived on reconnect, opted-out ones were correctly not kept, nothing was replayed twice, and there were no console or server errors.
 - **Install check:** a fresh virtual environment, then `pip install -e ".[dev]"`, `pytest` and `python demo.py`, exactly what a reviewer runs. CI repeats this on Python 3.10 and 3.13.
 
 ## 9. What worked, and what I'd do differently

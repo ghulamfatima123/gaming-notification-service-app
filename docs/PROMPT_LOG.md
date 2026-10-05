@@ -142,3 +142,15 @@ A running record of the prompts and decisions behind this project, written along
 - **Scope widened by the AI:** you asked for social events after reconnecting. The inbox keeps every missed notification the player hasn't opted out of, because a missed attack matters too.
 - **Tests:** 68 in total. Planted bugs (undelivered not kept, never replayed, offline reported as delivered) were all caught. The first planted-bug run **hung**: the WebSocket test waited forever for a "missed" message that never came. The run was stopped, the mutated router was restored by hand, and the test was changed to trigger a reply first, so a missing replay fails fast. The check now runs with a timeout.
 - **Browser check:** Player 2 disconnects; Player 1 sends a friend request, a defeat and a follow; Player 2 reconnects and sees all three tagged as missed; Accept on the missed request notifies Player 1.
+
+## Prompt 11: "Check all requirements and best practices; test by disconnecting both players one by one"
+
+**Live test (server restarted for clean state; log confirmed exactly one socket per player):**
+- **Round A:** Player 1 offline. Player 2 sent a friend request, an attack, a defeat and a follow, and leveled up (self). The server logged all four as "kept for later". On reconnect, Player 1 got exactly those four, tagged "Missed while offline"; the level-up didn't leak in. Accept on the missed request notified Player 2.
+- **Round B:** Player 2 turned Social **off**, then went offline. Player 1 sent a friend request, a follow, an attack and a defeat. The server logged both social events as suppressed (opted out) and kept only the attack and defeat. On reconnect, Player 2 got exactly those two, and the Social toggle came back off from the server.
+- **Edge case:** reconnecting both players again replayed nothing. No browser console errors and no server errors.
+- **Before testing:** an earlier attempt was paused because the server log showed a second Player 1 socket (the user's own tab). Testing then would have delivered live instead of going to the inbox. The AI stopped and asked rather than reporting a misleading result.
+
+**Code review:** ran `ruff` (E, F, W, B, UP, SIM, I) and `mypy`. mypy was clean. Ruff's findings were typing modernizations for the 3.10 minimum (`X | None`, `collections.abc`) and `zip(strict=True)`, all applied and reviewed. Also removed a stale `Optional` annotation and unused `app.state` assignments. Ruff was added to the dev dependencies with a CI lint step.
+
+**Requirements re-checked against the PDF:** every listed event, channel, content, preference, handling and example-usage requirement is implemented and tested. The delivery requirements are also covered: the code runs from the documented commands, the GitHub repo is public, and the README and AI-usage documentation are in place.

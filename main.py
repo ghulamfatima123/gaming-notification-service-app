@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
@@ -92,8 +92,6 @@ def create_app() -> FastAPI:
     system = build_system(channel)
 
     app = FastAPI(title="Gaming Notification Service")
-    app.state.system = system
-    app.state.channel = channel
 
     @app.get("/", include_in_schema=False)
     async def dashboard() -> FileResponse:
@@ -116,7 +114,7 @@ def create_app() -> FastAPI:
                 )
             while True:
                 raw = await websocket.receive_text()
-                reply: Optional[dict[str, Any]]
+                reply: dict[str, Any]
                 try:
                     message = json.loads(raw)
                     if not isinstance(message, dict):

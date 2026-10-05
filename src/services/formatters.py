@@ -15,7 +15,8 @@ To support a new event: write one function here and add it to
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from src.domain.events import (
     BaseEvent,
@@ -33,7 +34,7 @@ from src.domain.notification import Notification, NotificationCategory
 
 # Each strategy accepts its own concrete event type. The registry below
 # guarantees the pairing, so the shared signature is typed loosely.
-Formatter = Callable[[Any], Optional[Notification]]
+Formatter = Callable[[Any], Notification | None]
 
 _SMALL_WORDS = {"a", "an", "and", "of", "the", "in", "on", "to", "for"}
 
@@ -64,7 +65,7 @@ def format_level_up(event: LevelUpEvent) -> Notification:
     )
 
 
-def format_item_acquired(event: ItemAcquiredEvent) -> Optional[Notification]:
+def format_item_acquired(event: ItemAcquiredEvent) -> Notification | None:
     # The spec only asks to notify for "rare or valuable" items.
     if event.rarity is ItemRarity.COMMON:
         return None
