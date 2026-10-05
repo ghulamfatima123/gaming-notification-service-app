@@ -154,3 +154,16 @@ A running record of the prompts and decisions behind this project, written along
 **Code review:** ran `ruff` (E, F, W, B, UP, SIM, I) and `mypy`. mypy was clean. Ruff's findings were typing modernizations for the 3.10 minimum (`X | None`, `collections.abc`) and `zip(strict=True)`, all applied and reviewed. Also removed a stale `Optional` annotation and unused `app.state` assignments. Ruff was added to the dev dependencies with a CI lint step.
 
 **Requirements re-checked against the PDF:** every listed event, channel, content, preference, handling and example-usage requirement is implemented and tested. The delivery requirements are also covered: the code runs from the documented commands, the GitHub repo is public, and the README and AI-usage documentation are in place.
+
+## Prompt 12: "Why is the architecture diagram not well drawn?"
+
+**Human input:** Pointed out that the README's ASCII architecture diagram looked poor.
+
+**AI review:** Agreed, and found that it was also **inaccurate**. When the inbox was added, the diagram showed an arrow from the channel to the inbox, but in the code the *router* keeps undelivered notifications. Other problems: the inbox line was over 100 characters wide (it scrolled on GitHub), two labels floated without being attached to anything, and the console channel and the replay-on-connect path were missing.
+
+**Fix:** replaced it with a **Mermaid** diagram, which GitHub renders natively. Before committing, the AI rendered three layout iterations in the browser:
+- A top-down layout with groups had crossing edges.
+- Groups with side-by-side direction were ignored by Mermaid when edges crossed group borders.
+- The final plain left-to-right layout has no crossings, numbered steps (1 format · 2 enabled? · 3 send · 4 offline: keep) and a one-paragraph legend.
+
+The final README block was verified in both light and dark themes with Mermaid's `strict` security level, the mode GitHub uses. HTML tags beyond `<br/>` were avoided because GitHub may show them as literal text.

@@ -56,30 +56,22 @@ Built with **Python 3.10+, FastAPI, and Pydantic v2**. Infrastructure is entirel
 
 The design is Hexagonal (Ports & Adapters) with an event-driven pipeline. The core depends only on abstract **ports**, and concrete **adapters** plug in at the edges.
 
+```mermaid
+flowchart LR
+    GE[GameEngine] -- "publish(event)" --> BUS
+    SS[SocialSystem] -- "publish(event)" --> BUS
+    BUS(["IEventBus<br/>(InMemoryEventBus)"]) -- subscribe --> R[NotificationRouter]
+
+    R -- "1 · format" --> F["Formatters<br/>(Strategy, one per event)"]
+    R -- "2 · enabled?" --> P(["IPreferenceRepository<br/>(InMemoryPreferenceRepository)"])
+    R -- "3 · send" --> C(["INotificationChannel<br/>(WebSocketChannel, ConsoleChannel)"])
+    R -- "4 · offline: keep" --> I(["INotificationInbox<br/>(InMemoryNotificationInbox)"])
+
+    C -- "live push" --> PL[/"Player's browser"/]
+    I -. "replayed on connect" .-> PL
 ```
- GameEngine / SocialSystem          (producers: know nothing about notifications)
-            │  publish(BaseEvent)
-            ▼
-     ┌─────────────┐
-     │  IEventBus  │◄──── InMemoryEventBus
-     └─────┬───────┘
-           │  subscribe
-           ▼
-  ┌──────────────────────┐   format (Strategy)   ┌───────────────┐
-  │  NotificationRouter  │──────────────────────►│  Formatters   │
-  └──────┬────────┬──────┘                       └───────────────┘
-         │        │ get(player_id)
-         │        ▼
-         │  ┌───────────────────────┐
-         │  │ IPreferenceRepository │◄── InMemoryPreferenceRepository
-         │  └───────────────────────┘
-         │ send(notification) → delivered?
-         ▼
-  ┌──────────────────────┐   not delivered    ┌────────────────────┐
-  │ INotificationChannel │───────────────────►│ INotificationInbox │◄── InMemoryNotificationInbox
-  └──────────────────────┘   (player offline) └────────────────────┘
-     ▲ WebSocketChannel (Adapter)                drained when the player connects
-```
+
+Rounded boxes are **ports** (interfaces), with the in-memory **adapter** plugged into each shown in brackets. The router only ever talks to ports. For each event it: **1** formats it with the matching strategy, **2** checks the recipient's preferences, **3** sends it, and **4** keeps it in the inbox if the player is offline. The inbox is replayed when the player connects.
 
 | Layer | Path | Responsibility |
 |---|---|---|
