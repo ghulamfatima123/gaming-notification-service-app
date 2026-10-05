@@ -175,6 +175,7 @@ This document records the prompt history, architectural decisions and engineerin
   * The first browser load crashed because a panel rendered the sidebar before it was registered; this was caught in the console and fixed with a guard.
   * A planted "no update on disconnect" bug made the roster test **hang**. It now triggers a reply first, so a missing update fails fast; both planted roster bugs are caught.
   * Ruff flagged one long line, which was fixed.
+  * **Version skew, found by the user:** a server started before the change (without `--reload`) rejected `watch_roster`, so the dashboard showed a red error and everyone as offline. The dashboard now degrades gracefully: it hides that specific error, shows presence from its own connections, shows "—" for data it can't know, and adds a short note. This was verified against the previous commit's server code.
 * **Verified live:** level-ups, an attack and a friend request updated Player 1's stats. Taking Player 2 offline showed "Offline · 2 waiting" and "1 online". Reconnecting cleared the badge and counted the missed notifications. A preference toggle updated the sidebar instantly. The layout was checked at 1440 px (sidebar left, two panels) and on a phone (sidebar stacked above, no horizontal scroll).
 
 ---

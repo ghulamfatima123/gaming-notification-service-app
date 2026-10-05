@@ -248,6 +248,7 @@
       constructor() {
         this.panels = new Map();   // player id -> PlayerPanel
         this.roster = new Map();   // player id -> latest server roster entry
+        this.rosterSupported = null;  // null until the server answers watch_roster
         this.selected = 1;
         this.list = document.getElementById("player-list");
         this.summary = document.getElementById("roster-summary");
@@ -260,27 +261,36 @@
       }
 
       updateRoster(entries) {
+        this.rosterSupported = true;
         this.roster = new Map(entries.map((e) => [e.player_id, e]));
         this.render();
       }
 
+      // An older server rejects watch_roster: fall back to this page's own connections.
+      markRosterUnsupported() {
+        this.rosterSupported = false;
+        this.render();
+      }
+
       live() {
-        return [...this.panels.values()].some((p) => p.connected);
+        return this.rosterSupported === true && [...this.panels.values()].some((p) => p.connected);
       }
 
       view(id) {
         const panel = this.panels.get(id);
-        const entry = this.live() ? this.roster.get(id) : undefined;
+        const live = this.live();
+        const entry = live ? this.roster.get(id) : undefined;
         const accent = panel ? panel.accent : EXTRA_ACCENTS[(id - 1) % EXTRA_ACCENTS.length];
-        const online = entry ? entry.online : false;
-        const tabs = entry ? entry.tabs : 0;
+        // Without a live roster, presence is only what this page can see.
+        const online = live ? Boolean(entry && entry.online) : Boolean(panel && panel.connected);
+        const tabs = live ? (entry ? entry.tabs : 0) : null;
         const prefs = entry ? entry.preferences : panel ? panel.preferences() : null;
         return {
           id, accent, online, tabs, prefs,
           name: `Player ${id}`,
           initials: `P${id}`,
           status: online ? (tabs > 1 ? `Online · ${tabs} tabs` : "Online") : "Offline",
-          waiting: this.live() ? (entry ? entry.waiting : 0) : null,
+          waiting: live ? (entry ? entry.waiting : 0) : null,
           level: panel ? panel.level : null,
           stats: panel ? panel.stats : null,
         };
@@ -292,7 +302,11 @@
         const views = ids.map((id) => this.view(id));
         const onlineCount = views.filter((v) => v.online).length;
         this.summary.textContent = `${views.length} players · ${onlineCount} online`;
-        this.note.classList.toggle("hidden", live);
+        const anyConnected = [...this.panels.values()].some((p) => p.connected);
+        this.note.textContent = this.rosterSupported === false
+          ? "This server doesn't share live presence, so the sidebar shows this page's connections only."
+          : "Connect a player to see live presence.";
+        this.note.classList.toggle("hidden", live || (anyConnected && this.rosterSupported !== false));
 
         this.list.replaceChildren(...views.map((v) => this.row(v)));
         const current = views.find((v) => v.id === this.selected) || views[0];
@@ -333,7 +347,7 @@
         d["stat-received"].textContent = stats ? stats.game + stats.social : "—";
         d["stat-waiting"].textContent = v.waiting == null ? "—" : v.waiting;
         d["stat-waiting"].className = `text-xl font-bold ${v.waiting ? "text-fuchsia-300" : "text-slate-50"}`;
-        d["stat-tabs"].textContent = v.tabs;
+        d["stat-tabs"].textContent = v.tabs == null ? "—" : v.tabs;
 
         const total = stats ? stats.game + stats.social : 0;
         const share = (n) => (total ? `${Math.round((n / total) * 100)}%` : "0%");
@@ -495,6 +509,7 @@
           case "ack":
             return this.setLast(this.pending.shift());
           case "error":
+            if (msg.message === "Unknown action: 'watch_roster'") return sidebar.markRosterUnsupported();
             this.pending.shift();
             return this.setLast(`Error: ${msg.message}`, true);
         }
