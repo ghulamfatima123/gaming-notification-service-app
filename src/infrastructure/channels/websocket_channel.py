@@ -48,6 +48,12 @@ class WebSocketChannel(INotificationChannel):
     def is_online(self, player_id: int) -> bool:
         return bool(self._connections.get(player_id))
 
+    def connection_counts(self) -> dict[int, int]:
+        """Open sockets per online player."""
+        return {
+            player_id: len(sockets) for player_id, sockets in self._connections.items() if sockets
+        }
+
     async def send(self, notification: Notification) -> bool:
         player_id = notification.recipient_id
         sockets = self._connections.get(player_id)

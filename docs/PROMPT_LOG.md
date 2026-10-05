@@ -7,7 +7,7 @@ This document records the prompt history, architectural decisions and engineerin
 * **AI tooling:** Claude Code (Claude Opus 5.5) in the Claude desktop app. It was used for planning, implementation, test generation, browser-based UI testing and git.
 * **Workflow:** phase-gated, specification-driven development. Each phase ended with verification and a human review before the next began:
   Domain & Ports → In-Memory Adapters → Router & Strategies → Application & Dashboard → Test Suite & CI → Documentation → Extensions → Verification & Hardening.
-* **Core goal:** a decoupled, zero-infrastructure, event-driven notification service. It installs with `pip install -e ".[dev]"`, runs with `uvicorn main:app` (live dashboard) or `python demo.py` (headless), and is covered by 68 tests that CI runs on Python 3.10 and 3.13.
+* **Core goal:** a decoupled, zero-infrastructure, event-driven notification service. It installs with `pip install -e ".[dev]"`, runs with `uvicorn main:app` (live dashboard) or `python demo.py` (headless), and is covered by 71 tests that CI runs on Python 3.10 and 3.13.
 * **Prompt format:** prompts are condensed to their intent. The full opening brief is reproduced in `AI_WORKFLOW.md`.
 
 ---
@@ -154,6 +154,28 @@ This document records the prompt history, architectural decisions and engineerin
 * **Round B:** Player 2 had Social off, then went offline. Social events were suppressed and only the game events were kept and replayed. The preference survived the reconnect. Reconnecting again replayed nothing. No console or server errors.
 * **Static analysis:** `mypy` was clean. `ruff` (E, F, W, B, UP, SIM, I) found only typing modernizations for the 3.10 floor; these were applied and reviewed, and ruff now runs in CI.
 * **Diagram:** the ASCII diagram had become inaccurate (it showed the channel writing to the inbox; the router does) and overflowed on GitHub. It was replaced with a Mermaid diagram, verified in light and dark themes under Mermaid's `strict` mode, as GitHub renders it.
+
+---
+
+### Phase 9: Players Sidebar
+
+**Prompts:**
+> "Design a sidebar that shows every player's information."
+
+> "Implement the 'Dashboard with player sidebar' design."
+
+**AI contributions & key decisions:**
+* **Design first:** a two-artboard design (the dashboard with the sidebar, and a sheet of player-row states) matched to the existing dashboard's colors. Before implementing, the AI flagged which data the server already had (presence, preferences, inbox) and which it didn't track (level, notification history).
+* **No faked data:**
+  * **Presence, open tabs, waiting count and preferences** come from a new server `roster` message, built from the WebSocket channel's connection counts, the preference repository and a new `INotificationInbox.pending_counts()`.
+  * **Level, counts by category and recent notifications** come from what the dashboard actually received this session. Players the dashboard doesn't control show "—" rather than invented numbers.
+* **Opt-in protocol:** only sockets that send `{"action": "watch_roster"}` receive roster updates. All 68 existing tests passed unchanged, which proves other clients see the original protocol. The roster is pushed on connect, on disconnect and after any action that can change an inbox or preferences.
+* **Tests (71):** pending counts, connection counts, and a live roster scenario (offline player gets a waiting attack → connects → changes preferences → leaves).
+* **Self-corrections:**
+  * The first browser load crashed because a panel rendered the sidebar before it was registered; this was caught in the console and fixed with a guard.
+  * A planted "no update on disconnect" bug made the roster test **hang**. It now triggers a reply first, so a missing update fails fast; both planted roster bugs are caught.
+  * Ruff flagged one long line, which was fixed.
+* **Verified live:** level-ups, an attack and a friend request updated Player 1's stats. Taking Player 2 offline showed "Offline · 2 waiting" and "1 online". Reconnecting cleared the badge and counted the missed notifications. A preference toggle updated the sidebar instantly. The layout was checked at 1440 px (sidebar left, two panels) and on a phone (sidebar stacked above, no horizontal scroll).
 
 ---
 

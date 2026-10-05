@@ -134,3 +134,38 @@ def test_actor_is_taken_from_the_connection_not_the_payload(client):
         p3.send_json({"action": "attack", "target_id": 2, "attacker_id": 1})
         p3.receive_json()
         assert p2.receive_json()["data"]["actor_id"] == 3
+
+
+def _entry(player_id, online, tabs, waiting, social=True):
+    return {
+        "player_id": player_id,
+        "online": online,
+        "tabs": tabs,
+        "waiting": waiting,
+        "preferences": {"game": True, "social": social},
+    }
+
+
+def test_roster_tracks_presence_preferences_and_waiting_notifications(client):
+    with player(client, 1) as p1:
+        p1.send_json({"action": "watch_roster"})
+        assert p1.receive_json() == {"type": "roster", "data": [_entry(1, True, 1, 0)]}
+
+        # Player 2 is offline, so the attack waits in their inbox.
+        p1.send_json({"action": "attack", "target_id": 2})
+        assert p1.receive_json()["type"] == "ack"
+        assert p1.receive_json()["data"] == [_entry(1, True, 1, 0), _entry(2, False, 0, 1)]
+
+        with player(client, 2) as p2:
+            assert p2.receive_json()["type"] == "missed"
+            # Connecting drained the inbox and is pushed to the watcher.
+            assert p1.receive_json()["data"] == [_entry(1, True, 1, 0), _entry(2, True, 1, 0)]
+
+            p2.send_json({"action": "set_preference", "category": "social", "enabled": False})
+            assert p2.receive_json()["type"] == "preferences"
+            assert p1.receive_json()["data"][1] == _entry(2, True, 1, 0, social=False)
+
+        # Player 2 left with nothing waiting, so they drop off the roster. Trigger a
+        # reply too, so a missing update fails the test instead of hanging it.
+        p1.send_json({"action": "level_up", "level": 2})
+        assert p1.receive_json() == {"type": "roster", "data": [_entry(1, True, 1, 0)]}

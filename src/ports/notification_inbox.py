@@ -17,3 +17,7 @@ class INotificationInbox(ABC):
     @abstractmethod
     async def drain(self, player_id: int) -> list[Notification]:
         """Return the player's pending notifications (oldest first) and clear them."""
+
+    @abstractmethod
+    async def pending_counts(self) -> dict[int, int]:
+        """Pending notifications per player; players with none are omitted."""

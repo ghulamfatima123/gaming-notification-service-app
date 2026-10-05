@@ -43,7 +43,7 @@ How I used AI to go from the challenge brief to a working, tested system, and wh
 | 2 | In-memory adapters: event bus, preference repository, WebSocket channel |
 | 3 | Formatting strategies, `NotificationRouter`, `GameEngine` / `SocialSystem` producers |
 | 4 | FastAPI app, two-player live dashboard, headless `demo.py` |
-| 5 | pytest suite (68 tests today) and GitHub Actions CI |
+| 5 | pytest suite (71 tests today) and GitHub Actions CI |
 | 6 | README and this document |
 
 ## 3. Who did what
@@ -79,6 +79,8 @@ The full opening brief is in the [Appendix](#appendix-the-opening-prompt). Later
 | 14 | Live-test offline delivery for both players, then audit against the PDF and best practices | Two clean live-test rounds passed; `ruff` + `mypy` added as checks, ruff in CI |
 | 15 | The architecture diagram is hard to read: fix it | The ASCII diagram was also inaccurate; replaced with a verified Mermaid diagram |
 | 16 | Restructure the prompt log into a phase-by-phase format with an interview defense table | `docs/PROMPT_LOG.md` rewritten in that format |
+| 17 | Design a sidebar showing every player's information | A two-artboard design; the AI noted which data the server already had and which it didn't track |
+| 18 | Implement the sidebar design | An opt-in `watch_roster` presence feed (online, tabs, waiting, preferences) plus session stats in the dashboard; no faked data |
 
 ## 5. Where AI review improved my plan
 
@@ -117,7 +119,7 @@ Code that only *looked* right was never accepted. Each phase ended with evidence
 
 - **Phases 1–3:** scripted smoke runs through the real bus, router and preferences (e.g. the PDF triggers produced exactly the four expected messages).
 - **Phase 4:** a `TestClient` script exercising the full WebSocket protocol, including 8 malformed inputs. A live browser session covering an attack (defender only), friend request → Accept → requester notified, Social opt-out, Disconnect, and two tabs per player.
-- **Phase 5:** the test suite (57 tests then, 68 now) plus a **mutation check**. Five realistic bugs were planted one at a time, and the suite caught every one:
+- **Phase 5:** the test suite (57 tests then, 71 now) plus a **mutation check**. Five realistic bugs were planted one at a time, and the suite caught every one:
   - PvP sent to the attacker
   - preferences ignored
   - preferences checked for the wrong player

@@ -107,6 +107,15 @@ async def test_inbox_returns_pending_oldest_first_per_player_and_clears():
     assert await inbox.drain(2) == [other]
 
 
+async def test_inbox_reports_pending_counts_per_player():
+    inbox = InMemoryNotificationInbox()
+    for n in (_notification(1), _notification(1), _notification(2)):
+        await inbox.add(n)
+    await inbox.drain(2)
+
+    assert await inbox.pending_counts() == {1: 2}
+
+
 async def test_inbox_keeps_only_the_most_recent_per_player():
     inbox = InMemoryNotificationInbox(max_per_player=2)
     notifications = [_notification(1) for _ in range(3)]
@@ -156,6 +165,17 @@ async def test_channel_delivers_to_every_socket_of_the_recipient_only():
     message = tab_a.messages[0]
     assert message["type"] == "notification"
     assert message["data"]["recipient_id"] == 1
+
+
+def test_channel_counts_open_sockets_per_online_player():
+    channel = WebSocketChannel()
+    tab_a, tab_b = FakeSocket(), FakeSocket()
+    channel.register(1, tab_a)
+    channel.register(1, tab_b)
+    channel.register(2, FakeSocket())
+    channel.unregister(1, tab_b)
+
+    assert channel.connection_counts() == {1: 1, 2: 1}
 
 
 async def test_channel_reports_offline_players_as_not_delivered():

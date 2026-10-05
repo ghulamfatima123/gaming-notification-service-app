@@ -34,6 +34,25 @@ async def preferences_message(
     return {"type": "preferences", "data": preferences.model_dump(mode="json")}
 
 
+async def roster_message(system: NotificationSystem, channel: WebSocketChannel) -> dict[str, Any]:
+    """Every player who is online or has notifications waiting, for the dashboard sidebar."""
+    tabs = channel.connection_counts()
+    waiting = await system.inbox.pending_counts()
+    players = []
+    for player_id in sorted(tabs.keys() | waiting.keys()):
+        preferences = await system.preferences.get(player_id)
+        players.append(
+            {
+                "player_id": player_id,
+                "online": player_id in tabs,
+                "tabs": tabs.get(player_id, 0),
+                "waiting": waiting.get(player_id, 0),
+                "preferences": preferences.model_dump(mode="json")["enabled"],
+            }
+        )
+    return {"type": "roster", "data": players}
+
+
 async def handle_action(
     system: NotificationSystem, player_id: int, message: dict[str, Any]
 ) -> dict[str, Any]:
@@ -92,6 +111,19 @@ def create_app() -> FastAPI:
     system = build_system(channel)
 
     app = FastAPI(title="Gaming Notification Service")
+    # Sockets that asked for roster updates ({"action": "watch_roster"}). Opt-in, so
+    # clients that don't need presence see exactly the original protocol.
+    roster_watchers: set[WebSocket] = set()
+
+    async def broadcast_roster() -> None:
+        if not roster_watchers:
+            return
+        message = await roster_message(system, channel)
+        for watcher in list(roster_watchers):
+            try:
+                await watcher.send_json(message)
+            except Exception:  # closed mid-send; its own handler cleans up
+                roster_watchers.discard(watcher)
 
     @app.get("/", include_in_schema=False)
     async def dashboard() -> FileResponse:
@@ -105,6 +137,8 @@ def create_app() -> FastAPI:
     async def player_socket(websocket: WebSocket, player_id: int) -> None:
         await websocket.accept()
         channel.register(player_id, websocket)
+        console = logging.getLogger("websocket")
+        console.info(f"Player {player_id} connected to WebSocket")
         try:
             await websocket.send_json(await preferences_message(system, player_id))
             missed = await system.inbox.drain(player_id)
@@ -112,6 +146,7 @@ def create_app() -> FastAPI:
                 await websocket.send_json(
                     {"type": "missed", "data": [n.model_dump(mode="json") for n in missed]}
                 )
+            await broadcast_roster()
             while True:
                 raw = await websocket.receive_text()
                 reply: dict[str, Any]
@@ -119,15 +154,23 @@ def create_app() -> FastAPI:
                     message = json.loads(raw)
                     if not isinstance(message, dict):
                         raise ValueError("Expected a JSON object")
-                    reply = await handle_action(system, player_id, message)
+                    if message.get("action") == "watch_roster":
+                        roster_watchers.add(websocket)
+                        reply = await roster_message(system, channel)
+                    else:
+                        reply = await handle_action(system, player_id, message)
                 except (KeyError, TypeError, ValueError) as exc:
                     # pydantic.ValidationError and JSONDecodeError are ValueErrors.
                     reply = {"type": "error", "message": describe_error(exc)}
                 await websocket.send_json(reply)
+                if reply["type"] in ("ack", "preferences"):
+                    await broadcast_roster()  # inbox or preferences may have changed
         except WebSocketDisconnect:
             pass
         finally:
             channel.unregister(player_id, websocket)
+            roster_watchers.discard(websocket)
+            await broadcast_roster()
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app

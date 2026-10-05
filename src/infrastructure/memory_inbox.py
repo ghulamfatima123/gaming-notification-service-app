@@ -29,3 +29,6 @@ class InMemoryNotificationInbox(INotificationInbox):
     async def drain(self, player_id: int) -> list[Notification]:
         pending = self._pending.pop(player_id, None)
         return list(pending) if pending else []
+
+    async def pending_counts(self) -> dict[int, int]:
+        return {player_id: len(queue) for player_id, queue in self._pending.items() if queue}

@@ -34,6 +34,8 @@ Built with **Python 3.10+, FastAPI, and Pydantic v2**. Infrastructure is entirel
 
 **Real-time delivery.** In-app notifications go over WebSockets. A player can be connected from several tabs at once.
 
+**Players sidebar.** The dashboard lists every player with live presence (online, open tabs), notifications waiting in their inbox, preferences, level and a per-player summary of what they received.
+
 **Offline catch-up.** Notifications for players who aren't connected are kept in an inbox. When the player connects, they arrive with a "Missed while offline" label.
 
 ### Requirements coverage
@@ -129,7 +131,7 @@ Rounded boxes are **ports** (interfaces), with the in-memory **adapter** plugged
 │   ├── infrastructure/       # memory_event_bus.py, memory_prefs_repo.py, memory_inbox.py, channels/
 │   └── producers/            # game_engine.py, social_system.py
 ├── static/index.html         # live two-player dashboard
-├── tests/                    # pytest suite (68 tests)
+├── tests/                    # pytest suite (71 tests)
 ├── .github/workflows/ci.yml  # ruff lint + pytest + demo on Python 3.10 and 3.13
 ├── AI_WORKFLOW.md            # how AI was used, and where human judgment steered
 └── docs/PROMPT_LOG.md        # AI prompts and decisions, phase by phase
@@ -168,7 +170,8 @@ Open <http://localhost:8000>. Player 1 and Player 2 appear side by side, each wi
 | **Friend request** → **Accept** in the other feed | The original sender gets "accepted your friend request". |
 | Turn off **Social events**, then have the other player follow you | Nothing arrives. Game events still come through. |
 | **Disconnect** a player, trigger events at them, then **Connect** | The missed notifications appear with a "Missed while offline" label (Accept still works). |
-| Open the page in a second tab | Both tabs receive the player's notifications. |
+| Open the page in a second tab | Both tabs receive the player's notifications, and the sidebar shows "Online · 2 tabs". |
+| Watch the **Players** sidebar while doing any of the above | Presence, "N waiting" badges and preferences update live. Click a player for their level, notification counts by category and recent notifications. |
 
 The dashboard uses the Tailwind CDN, so it needs an internet connection for styling.
 
@@ -184,7 +187,7 @@ pytest
 | `test_formatters.py` | Every domain event has a strategy; message text; rarity filtering; item-name formatting |
 | `test_domain.py` | Self-targeting rejected; positive levels; immutability; preference defaults |
 | `test_infrastructure.py` | Bus fan-out, catch-all subscriptions, failure isolation; repository defaults; inbox ordering, clearing and cap; WebSocket multi-tab delivery, delivery reporting, dead-socket cleanup |
-| `test_app.py` | Real WebSocket sessions: attack, defeat, missed notifications on reconnect, friend request → accept, preference toggle, 8 malformed inputs, the actor can't be spoofed |
+| `test_app.py` | Real WebSocket sessions: attack, defeat, missed notifications on reconnect, live roster (presence, waiting, preferences), friend request → accept, preference toggle, 8 malformed inputs, the actor can't be spoofed |
 
 The tests drive the real in-memory adapters, with a `RecordingChannel` test double in place of WebSockets. To check that the suite catches real defects, deliberately planted bugs were each confirmed to fail it: PvP sent to the attacker, preferences ignored, preferences checked for the wrong player, bus failures not isolated, and the actor read from the payload. The inbox got the same treatment: undelivered notifications not kept, inbox never replayed, and offline reported as delivered. CI lints with ruff, then runs the suite and the demo, on Python 3.10 and 3.13. The code also passes `mypy` with no errors.
 
@@ -199,9 +202,12 @@ The tests drive the real in-memory adapters, with a `RecordingChannel` test doub
 {"action": "complete_challenge", "challenge_name": "Dragon Slayer"}
 {"action": "attack" | "defeat" | "send_friend_request" | "accept_friend_request" | "follow", "target_id": 2}
 {"action": "set_preference", "category": "game" | "social", "enabled": false}
+{"action": "watch_roster"}
 ```
 
 **Server → client:** `{"type": "notification", "data": {...}}`, `{"type": "preferences", "data": {...}}` (sent on connect and after each change), `{"type": "missed", "data": [...]}` (sent on connect if anything arrived while offline), `{"type": "ack", "action": "..."}` and `{"type": "error", "message": "..."}`. Invalid input returns an error message and the connection stays open.
+
+**Roster (opt-in):** after `{"action": "watch_roster"}`, the socket receives `{"type": "roster", "data": [{"player_id", "online", "tabs", "waiting", "preferences"}]}` straight away, and again whenever presence, preferences or an inbox changes. It lists every player who is online or has notifications waiting. Clients that don't opt in see exactly the original protocol. In the sidebar, level and the notification summary come from what the dashboard received this session; the server doesn't track player stats.
 
 ---
 
